@@ -4,20 +4,29 @@ A modern, desktop todo application built with React, TypeScript, Tailwind CSS, a
 
 ## Features
 
+### Core Functionality
 - ✅ Clean, modern UI with light/dark theme support
 - ✅ Task management with priorities and due dates
 - ✅ Dashboard view for today's tasks
-- ✅ All tasks and completed tasks views
-- ✅ **SQLite database persistence** (Phase 2)
+- ✅ **Recurring tasks** - daily, weekly, monthly patterns
+- ✅ **Search, filter, and sort** - find tasks quickly
+- ✅ **SQLite database persistence**
 - ✅ **Task attachments** - attach files to tasks
 - ✅ **Projects/categories** - organize tasks by project
+
+### System Integration
 - ✅ **System notifications** - reminders for due tasks
 - ✅ **System tray** - quick access menu
 - ✅ **Auto-start option** - launch on system boot
 - ✅ **Backup & restore** - timestamped database backups
 - ✅ **Import/Export** - JSON data portability
+
+### User Experience
 - ✅ Accessible components with keyboard navigation
 - ✅ Smooth animations with Framer Motion
+- ✅ Micro-interactions and hover effects
+- ✅ Empty state illustrations
+- ✅ Offline support with local persistence
 
 ## Tech Stack
 
@@ -64,7 +73,35 @@ cargo --version
 **If you still get "program not found" errors:**
 The project includes wrapper scripts (`run-tauri-dev.cmd` and `run-tauri-build.cmd`) that automatically add Cargo to PATH before running Tauri commands. These are used by the npm scripts automatically.
 
-**Note**: Tauri icons are placeholder. To generate proper app icons, use tools like [Tauri Icon Generator](https://github.com/tauri-apps/tauri-icon) or add your own icons to `src-tauri/icons/`.
+## Custom App Icons
+
+The app includes placeholder icons. To create custom branded icons:
+
+### Requirements
+Generate icons in the following sizes:
+- **Windows**: 32x32, 128x128, 256x256 (ICO format)
+- **macOS**: 128x128, 256x256, 512x512, 1024x1024 (ICNS format)
+- **Linux**: 32x32, 128x128, 256x256, 512x512 (PNG format)
+
+### Using @tauri-apps/cli Icon Generator
+
+1. Create a source icon (1024x1024 PNG with transparency)
+2. Save it as `app-icon.png` in the project root
+3. Run the icon generator:
+```bash
+npm run tauri icon app-icon.png
+```
+
+This will automatically generate all required icon formats and place them in `src-tauri/icons/`.
+
+### Manual Icon Placement
+
+Alternatively, manually create and place icons in `src-tauri/icons/`:
+- `icon.ico` (Windows)
+- `icon.icns` (macOS)  
+- `icon.png`, `128x128.png`, `128x128@2x.png`, etc. (Linux)
+
+The `tauri.conf.json` file references these icons and they'll be bundled with your app builds.
 
 ## Quick Start
 
@@ -276,6 +313,104 @@ The app includes:
 - Focus management in modals
 - Semantic HTML structure
 - High contrast support (via theme)
+
+## Building for Production
+
+### Development Build
+To test your app in development mode:
+```bash
+npm run tauri:dev
+```
+
+### Production Build
+To create optimized production builds for distribution:
+
+```bash
+npm run tauri:build
+```
+
+This command will:
+1. Build the optimized React frontend (`npm run build`)
+2. Compile the Rust backend with optimizations
+3. Create platform-specific installers
+
+### Build Output Locations
+
+After building, find your installers in:
+- **Windows**: `src-tauri/target/release/bundle/msi/` (.msi installer)
+- **macOS**: `src-tauri/target/release/bundle/dmg/` (.dmg installer)
+- **Linux**: `src-tauri/target/release/bundle/deb/` or `/appimage/` (.deb or .AppImage)
+
+### Build Configuration
+
+The build process is configured in `src-tauri/tauri.conf.json`:
+- **App name and version**: Update `package.productName` and `package.version`
+- **Bundle identifier**: Update `tauri.bundle.identifier` (e.g., `com.yourcompany.todoapp`)
+- **App icons**: Located in `src-tauri/icons/`
+- **Permissions**: Configure in `tauri.allowlist`
+
+### Cross-Platform Builds
+
+Tauri builds are platform-specific by default. To build for multiple platforms:
+
+**Option 1: Build on Target Platform**
+- Windows: Build on Windows machine
+- macOS: Build on macOS machine (requires Xcode Command Line Tools)
+- Linux: Build on Linux machine
+
+**Option 2: Use GitHub Actions**
+Set up GitHub Actions workflows to build on all platforms automatically. See [Tauri's GitHub Actions guide](https://tauri.app/v1/guides/building/cross-platform).
+
+### Code Signing (Optional)
+
+For production releases, consider code signing:
+
+**Windows**:
+- Requires a code signing certificate (.pfx)
+- Set environment variables: `TAURI_PRIVATE_KEY` and `TAURI_KEY_PASSWORD`
+- Update `tauri.conf.json` with certificate details
+
+**macOS**:
+- Requires Apple Developer account
+- Use `codesign` tool or configure in Xcode
+- Notarize your app for Gatekeeper
+
+**Linux**:
+- Code signing is optional but recommended
+- Can use GPG keys for package signing
+
+### App Updates
+
+To enable automatic updates in future releases:
+1. Set up a release server or use GitHub Releases
+2. Configure `tauri.updater` in `tauri.conf.json`
+3. Implement update checking in your app
+
+For now, users can manually download new versions from your releases page.
+
+## Distribution
+
+### Distributing Your App
+
+**Direct Distribution**:
+- Host installers on your website or file sharing service
+- Users download and install manually
+
+**GitHub Releases**:
+- Create a new release on GitHub
+- Upload the generated installers as release assets
+- Users download from the Releases page
+
+**App Stores** (requires additional setup):
+- **Microsoft Store**: Submit the .msix bundle
+- **Mac App Store**: Submit through App Store Connect
+- **Linux Repositories**: Submit to distro-specific repositories
+
+### Minimum System Requirements
+
+- **Windows**: Windows 10 or later (64-bit)
+- **macOS**: macOS 10.15 (Catalina) or later
+- **Linux**: Modern distributions with GTK 3.0+
 
 ## Contributing
 

@@ -1,8 +1,10 @@
 import { useState } from 'react'
+import { Calendar } from 'lucide-react'
 import { useTasks } from '../store/useTasks'
 import { TaskCard } from '../components/TaskCard'
 import { AddTaskModal } from '../components/AddTaskModal'
 import { ProgressBar } from '../components/ProgressBar'
+import { EmptyState } from '../components/EmptyState'
 import { isDateToday } from '../utils/dateHelpers'
 
 /**
@@ -25,7 +27,7 @@ export function Dashboard() {
         </div>
         <button
           onClick={() => setIsModalOpen(true)}
-          className="focus-ring rounded-lg bg-primary-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-600"
+          className="focus-ring rounded-lg bg-primary-500 px-4 py-2 text-sm font-medium text-white transition-all duration-200 hover:bg-primary-600 hover:scale-105 hover:shadow-lg"
           aria-label="Add new task"
         >
           + Add Task
@@ -48,7 +50,11 @@ export function Dashboard() {
               ))}
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">No tasks due today. Great job!</p>
+            <EmptyState
+              icon={Calendar}
+              title="No tasks due today"
+              description="You're all caught up! Great job staying on top of your tasks."
+            />
           )}
         </div>
 

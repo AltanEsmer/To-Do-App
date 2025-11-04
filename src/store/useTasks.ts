@@ -1,7 +1,10 @@
 import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 import * as tauriAdapter from '../api/tauriAdapter'
 
 export type TaskPriority = 'low' | 'medium' | 'high'
+
+export type RecurrenceType = 'none' | 'daily' | 'weekly' | 'monthly'
 
 export interface Task {
   id: string
@@ -14,6 +17,9 @@ export interface Task {
   updatedAt: Date
   projectId?: string
   orderIndex?: number
+  recurrenceType: RecurrenceType
+  recurrenceInterval: number
+  recurrenceParentId?: string
 }
 
 interface TasksState {
@@ -41,15 +47,20 @@ function convertTask(task: tauriAdapter.Task): Task {
     updatedAt: new Date(task.updated_at * 1000),
     projectId: task.project_id,
     orderIndex: task.order_index,
+    recurrenceType: (task.recurrence_type as RecurrenceType) || 'none',
+    recurrenceInterval: task.recurrence_interval || 1,
+    recurrenceParentId: task.recurrence_parent_id,
   }
 }
 
-export const useTasks = create<TasksState>((set, get) => ({
-  tasks: [],
-  loading: false,
-  error: null,
+export const useTasks = create<TasksState>()(
+  persist(
+    (set, get) => ({
+      tasks: [],
+      loading: false,
+      error: null,
 
-  syncTasks: async () => {
+      syncTasks: async () => {
     set({ loading: true, error: null })
     try {
       const rustTasks = await tauriAdapter.getTasks()
@@ -71,6 +82,8 @@ export const useTasks = create<TasksState>((set, get) => ({
         due_date: taskData.dueDate ? Math.floor(taskData.dueDate.getTime() / 1000) : undefined,
         priority: taskData.priority,
         project_id: taskData.projectId,
+        recurrence_type: taskData.recurrenceType || 'none',
+        recurrence_interval: taskData.recurrenceInterval || 1,
       })
       const newTask = convertTask(rustTask)
       set((state) => ({
@@ -93,6 +106,8 @@ export const useTasks = create<TasksState>((set, get) => ({
         priority: updates.priority,
         project_id: updates.projectId,
         order_index: updates.orderIndex,
+        recurrence_type: updates.recurrenceType !== undefined ? updates.recurrenceType : undefined,
+        recurrence_interval: updates.recurrenceInterval !== undefined ? updates.recurrenceInterval : undefined,
       })
       const updatedTask = convertTask(rustTask)
       set((state) => ({
@@ -138,4 +153,11 @@ export const useTasks = create<TasksState>((set, get) => ({
   getTaskById: (id) => {
     return get().tasks.find((task) => task.id === id)
   },
-}))
+    }),
+    {
+      name: 'tasks-storage',
+      // Only persist tasks array, not loading/error states
+      partialize: (state) => ({ tasks: state.tasks }),
+    }
+  )
+)

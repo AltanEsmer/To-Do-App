@@ -19,6 +19,9 @@ pub struct Task {
     pub updated_at: i64,
     pub project_id: Option<String>,
     pub order_index: i32,
+    pub recurrence_type: String, // none, daily, weekly, monthly, custom
+    pub recurrence_interval: i32,
+    pub recurrence_parent_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -64,6 +67,8 @@ pub struct CreateTaskInput {
     pub due_date: Option<i64>,
     pub priority: String,
     pub project_id: Option<String>,
+    pub recurrence_type: Option<String>,
+    pub recurrence_interval: Option<i32>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -74,6 +79,8 @@ pub struct UpdateTaskInput {
     pub priority: Option<String>,
     pub project_id: Option<String>,
     pub order_index: Option<i32>,
+    pub recurrence_type: Option<String>,
+    pub recurrence_interval: Option<i32>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -107,7 +114,7 @@ fn now() -> i64 {
 // Helper function to fetch a task by ID (assumes lock is already held)
 fn fetch_task(conn: &rusqlite::Connection, id: &str) -> Result<Task, String> {
     conn.query_row(
-        "SELECT id, title, description, due_at, created_at, updated_at, priority, completed_at, project_id, order_index, metadata FROM tasks WHERE id = ?1",
+        "SELECT id, title, description, due_at, created_at, updated_at, priority, completed_at, project_id, order_index, metadata, recurrence_type, recurrence_interval, recurrence_parent_id FROM tasks WHERE id = ?1",
         params![id],
         |row| {
             Ok(Task {
@@ -121,6 +128,9 @@ fn fetch_task(conn: &rusqlite::Connection, id: &str) -> Result<Task, String> {
                 completed: row.get::<_, Option<i64>>(7)?.is_some(),
                 project_id: row.get(8)?,
                 order_index: row.get(9).unwrap_or(0),
+                recurrence_type: row.get(11).unwrap_or_else(|_| "none".to_string()),
+                recurrence_interval: row.get(12).unwrap_or(1),
+                recurrence_parent_id: row.get(13).ok(),
             })
         },
     ).map_err(|e| format!("Task not found: {}", e))
@@ -134,7 +144,7 @@ pub fn get_tasks(
 ) -> Result<Vec<Task>, String> {
     let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
     
-    let mut query = "SELECT id, title, description, due_at, created_at, updated_at, priority, completed_at, project_id, order_index, metadata FROM tasks WHERE 1=1".to_string();
+    let mut query = "SELECT id, title, description, due_at, created_at, updated_at, priority, completed_at, project_id, order_index, metadata, recurrence_type, recurrence_interval, recurrence_parent_id FROM tasks WHERE 1=1".to_string();
     let mut query_params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
     
     if let Some(f) = filter {
@@ -180,6 +190,9 @@ pub fn get_tasks(
             completed: row.get::<_, Option<i64>>(7)?.is_some(),
             project_id: row.get(8)?,
             order_index: row.get(9).unwrap_or(0),
+            recurrence_type: row.get(11).unwrap_or_else(|_| "none".to_string()),
+            recurrence_interval: row.get(12).unwrap_or(1),
+            recurrence_parent_id: row.get(13).ok(),
         })
     }).map_err(|e| format!("Query execution error: {}", e))?;
     
@@ -208,8 +221,8 @@ pub fn create_task(
     let now = now();
     
     db.conn.execute(
-        "INSERT INTO tasks (id, title, description, due_at, created_at, updated_at, priority, completed_at, project_id, order_index, metadata)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+        "INSERT INTO tasks (id, title, description, due_at, created_at, updated_at, priority, completed_at, project_id, order_index, metadata, recurrence_type, recurrence_interval, recurrence_parent_id)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
         params![
             id.clone(),
             input.title,
@@ -221,6 +234,9 @@ pub fn create_task(
             None::<i64>,
             input.project_id,
             0,
+            None::<String>,
+            input.recurrence_type.unwrap_or_else(|| "none".to_string()),
+            input.recurrence_interval.unwrap_or(1),
             None::<String>
         ],
     ).map_err(|e| format!("Failed to create task: {}", e))?;
@@ -264,6 +280,14 @@ pub fn update_task(
         updates.push("order_index = ?");
         query_params.push(Box::new(order_index));
     }
+    if let Some(recurrence_type) = input.recurrence_type {
+        updates.push("recurrence_type = ?");
+        query_params.push(Box::new(recurrence_type));
+    }
+    if let Some(recurrence_interval) = input.recurrence_interval {
+        updates.push("recurrence_interval = ?");
+        query_params.push(Box::new(recurrence_interval));
+    }
     
     if updates.is_empty() {
         return fetch_task(&db.conn, &id);
@@ -298,12 +322,13 @@ pub fn toggle_complete(
     let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
     
     // Get current task state
-    let completed: Option<i64> = db.conn.query_row(
-        "SELECT completed_at FROM tasks WHERE id = ?1",
+    let task_info: (Option<i64>, String, i32) = db.conn.query_row(
+        "SELECT completed_at, recurrence_type, recurrence_interval FROM tasks WHERE id = ?1",
         params![id],
-        |row| row.get(0),
+        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
     ).map_err(|e| format!("Task not found: {}", e))?;
     
+    let (completed, recurrence_type, recurrence_interval) = task_info;
     let now = now();
     let new_completed = if completed.is_some() { None } else { Some(now) };
     
@@ -312,7 +337,63 @@ pub fn toggle_complete(
         params![new_completed, now, id.clone()],
     ).map_err(|e| format!("Failed to toggle complete: {}", e))?;
     
+    // If task is being marked complete and has recurrence, create new instance
+    if new_completed.is_some() && recurrence_type != "none" {
+        create_recurring_instance(&db.conn, &id, &recurrence_type, recurrence_interval)?;
+    }
+    
     fetch_task(&db.conn, &id)
+}
+
+// Helper function to create a recurring task instance
+fn create_recurring_instance(conn: &rusqlite::Connection, parent_id: &str, recurrence_type: &str, interval: i32) -> Result<(), String> {
+    // Fetch original task details
+    let original: (String, Option<String>, Option<i64>, String, Option<String>, i32) = conn.query_row(
+        "SELECT title, description, due_at, priority, project_id, order_index FROM tasks WHERE id = ?1",
+        params![parent_id],
+        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?, row.get(5)?)),
+    ).map_err(|e| format!("Failed to fetch original task: {}", e))?;
+    
+    let (title, description, due_date, priority, project_id, order_index) = original;
+    
+    // Calculate new due date based on recurrence type
+    let new_due_date = if let Some(due) = due_date {
+        let days_to_add = match recurrence_type {
+            "daily" => interval,
+            "weekly" => interval * 7,
+            "monthly" => interval * 30, // Approximate
+            _ => 0,
+        };
+        Some(due + (days_to_add as i64 * 24 * 60 * 60))
+    } else {
+        None
+    };
+    
+    let new_id = uuid::Uuid::new_v4().to_string();
+    let now = now();
+    
+    conn.execute(
+        "INSERT INTO tasks (id, title, description, due_at, created_at, updated_at, priority, completed_at, project_id, order_index, metadata, recurrence_type, recurrence_interval, recurrence_parent_id)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+        params![
+            new_id,
+            title,
+            description,
+            new_due_date,
+            now,
+            now,
+            priority,
+            None::<i64>,
+            project_id,
+            order_index,
+            None::<String>,
+            recurrence_type,
+            interval,
+            Some(parent_id)
+        ],
+    ).map_err(|e| format!("Failed to create recurring task instance: {}", e))?;
+    
+    Ok(())
 }
 
 // Project commands
@@ -753,7 +834,7 @@ pub fn export_data(
     
     // Get all tasks
     let mut tasks = Vec::new();
-    let mut stmt = db.conn.prepare("SELECT id, title, description, due_at, created_at, updated_at, priority, completed_at, project_id, order_index, metadata FROM tasks ORDER BY order_index, created_at").map_err(|e| format!("Query error: {}", e))?;
+    let mut stmt = db.conn.prepare("SELECT id, title, description, due_at, created_at, updated_at, priority, completed_at, project_id, order_index, metadata, recurrence_type, recurrence_interval, recurrence_parent_id FROM tasks ORDER BY order_index, created_at").map_err(|e| format!("Query error: {}", e))?;
     let rows = stmt.query_map([], |row| {
         Ok(Task {
             id: row.get(0)?,
@@ -766,6 +847,9 @@ pub fn export_data(
             completed: row.get::<_, Option<i64>>(7)?.is_some(),
             project_id: row.get(8)?,
             order_index: row.get(9).unwrap_or(0),
+            recurrence_type: row.get(11).unwrap_or_else(|_| "none".to_string()),
+            recurrence_interval: row.get(12).unwrap_or(1),
+            recurrence_parent_id: row.get(13).ok(),
         })
     }).map_err(|e| format!("Query execution error: {}", e))?;
     for row in rows {
@@ -924,7 +1008,7 @@ pub fn import_data(
                 
                 if exists {
                     tx.execute(
-                        "UPDATE tasks SET title = ?1, description = ?2, due_at = ?3, priority = ?4, completed_at = ?5, project_id = ?6, order_index = ?7, updated_at = ?8 WHERE id = ?9",
+                        "UPDATE tasks SET title = ?1, description = ?2, due_at = ?3, priority = ?4, completed_at = ?5, project_id = ?6, order_index = ?7, recurrence_type = ?8, recurrence_interval = ?9, updated_at = ?10 WHERE id = ?11",
                         params![
                             task.title,
                             task.description,
@@ -933,6 +1017,8 @@ pub fn import_data(
                             if task.completed { Some(now()) } else { None::<i64> },
                             task.project_id,
                             task.order_index,
+                            task.recurrence_type,
+                            task.recurrence_interval,
                             now(),
                             task.id
                         ],
@@ -940,7 +1026,7 @@ pub fn import_data(
                     summary.tasks_updated += 1;
                 } else {
                     tx.execute(
-                        "INSERT INTO tasks (id, title, description, due_at, created_at, updated_at, priority, completed_at, project_id, order_index, metadata) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+                        "INSERT INTO tasks (id, title, description, due_at, created_at, updated_at, priority, completed_at, project_id, order_index, metadata, recurrence_type, recurrence_interval, recurrence_parent_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
                         params![
                             task.id,
                             task.title,
@@ -952,7 +1038,10 @@ pub fn import_data(
                             if task.completed { Some(task.updated_at) } else { None::<i64> },
                             task.project_id,
                             task.order_index,
-                            None::<String>
+                            None::<String>,
+                            task.recurrence_type,
+                            task.recurrence_interval,
+                            task.recurrence_parent_id
                         ],
                     ).ok();
                     summary.tasks_added += 1;

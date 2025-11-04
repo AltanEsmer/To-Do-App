@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import * as Dialog from '@radix-ui/react-dialog'
-import { useTasks, TaskPriority } from '../store/useTasks'
+import { useTasks, TaskPriority, RecurrenceType } from '../store/useTasks'
 
 interface AddTaskModalProps {
   open: boolean
@@ -18,6 +18,8 @@ export function AddTaskModal({ open, onOpenChange }: AddTaskModalProps) {
   const [description, setDescription] = useState('')
   const [dueDate, setDueDate] = useState('')
   const [priority, setPriority] = useState<TaskPriority>('medium')
+  const [recurrenceType, setRecurrenceType] = useState<RecurrenceType>('none')
+  const [recurrenceInterval, setRecurrenceInterval] = useState(1)
   const titleInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -38,6 +40,8 @@ export function AddTaskModal({ open, onOpenChange }: AddTaskModalProps) {
         dueDate: dueDate ? new Date(dueDate) : undefined,
         priority,
         completed: false,
+        recurrenceType,
+        recurrenceInterval,
       })
 
       // Reset form
@@ -45,6 +49,8 @@ export function AddTaskModal({ open, onOpenChange }: AddTaskModalProps) {
       setDescription('')
       setDueDate('')
       setPriority('medium')
+      setRecurrenceType('none')
+      setRecurrenceInterval(1)
       onOpenChange(false)
     } catch (error) {
       console.error('Failed to add task:', error)
@@ -57,6 +63,8 @@ export function AddTaskModal({ open, onOpenChange }: AddTaskModalProps) {
     setDescription('')
     setDueDate('')
     setPriority('medium')
+    setRecurrenceType('none')
+    setRecurrenceInterval(1)
     onOpenChange(false)
   }
 
@@ -157,6 +165,41 @@ export function AddTaskModal({ open, onOpenChange }: AddTaskModalProps) {
                               <option value="high">High</option>
                             </select>
                           </div>
+                        </div>
+
+                        <div>
+                          <label htmlFor="task-recurrence" className="mb-1 block text-sm font-medium text-foreground">
+                            Recurrence
+                          </label>
+                          <div className="grid grid-cols-2 gap-4">
+                            <select
+                              id="task-recurrence"
+                              value={recurrenceType}
+                              onChange={(e) => setRecurrenceType(e.target.value as RecurrenceType)}
+                              className="focus-ring w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
+                            >
+                              <option value="none">None</option>
+                              <option value="daily">Daily</option>
+                              <option value="weekly">Weekly</option>
+                              <option value="monthly">Monthly</option>
+                            </select>
+                            {recurrenceType !== 'none' && (
+                              <input
+                                type="number"
+                                min="1"
+                                value={recurrenceInterval}
+                                onChange={(e) => setRecurrenceInterval(Math.max(1, parseInt(e.target.value) || 1))}
+                                placeholder="Interval"
+                                className="focus-ring w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
+                                aria-label="Recurrence interval"
+                              />
+                            )}
+                          </div>
+                          {recurrenceType !== 'none' && (
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              Repeats every {recurrenceInterval} {recurrenceType === 'daily' ? 'day' : recurrenceType === 'weekly' ? 'week' : 'month'}{recurrenceInterval > 1 ? 's' : ''}
+                            </p>
+                          )}
                         </div>
                       </div>
 

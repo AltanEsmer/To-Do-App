@@ -1,7 +1,13 @@
 import { useState } from 'react'
+import { ListTodo } from 'lucide-react'
 import { useTasks } from '../store/useTasks'
 import { TaskCard } from '../components/TaskCard'
 import { AddTaskModal } from '../components/AddTaskModal'
+import { EmptyState } from '../components/EmptyState'
+import { SearchBar } from '../components/SearchBar'
+import { FilterBar } from '../components/FilterBar'
+import { SortDropdown } from '../components/SortDropdown'
+import { useFilteredTasks } from '../utils/useFilteredTasks'
 
 /**
  * Projects page showing all tasks (incomplete and completed)
@@ -10,8 +16,9 @@ export function Projects() {
   const { tasks } = useTasks()
   const [isModalOpen, setIsModalOpen] = useState(false)
 
-  const incompleteTasks = tasks.filter((task) => !task.completed)
-  const completedTasks = tasks.filter((task) => task.completed)
+  const filteredTasks = useFilteredTasks(tasks)
+  const incompleteTasks = filteredTasks.filter((task) => !task.completed)
+  const completedTasks = filteredTasks.filter((task) => task.completed)
 
   return (
     <div className="flex h-full flex-col">
@@ -24,11 +31,19 @@ export function Projects() {
         </div>
         <button
           onClick={() => setIsModalOpen(true)}
-          className="focus-ring rounded-lg bg-primary-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-600"
+          className="focus-ring rounded-lg bg-primary-500 px-4 py-2 text-sm font-medium text-white transition-all duration-200 hover:bg-primary-600 hover:scale-105 hover:shadow-lg"
           aria-label="Add new task"
         >
           + Add Task
         </button>
+      </div>
+
+      <div className="mb-4 space-y-3">
+        <SearchBar />
+        <div className="flex flex-wrap items-center gap-4">
+          <FilterBar />
+          <SortDropdown />
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto">
@@ -54,10 +69,24 @@ export function Projects() {
           </div>
         )}
 
+        {filteredTasks.length === 0 && tasks.length > 0 && (
+          <EmptyState
+            icon={ListTodo}
+            title="No tasks match your filters"
+            description="Try adjusting your search or filters to find what you're looking for."
+          />
+        )}
+
         {tasks.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-12 text-center">
-            <p className="text-muted-foreground">No tasks yet. Create your first task to get started!</p>
-          </div>
+          <EmptyState
+            icon={ListTodo}
+            title="No tasks yet"
+            description="Create your first task to get started on your productivity journey!"
+            action={{
+              label: 'Create Task',
+              onClick: () => setIsModalOpen(true),
+            }}
+          />
         )}
       </div>
 

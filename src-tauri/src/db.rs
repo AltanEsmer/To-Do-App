@@ -100,7 +100,33 @@ fn run_migrations(conn: &Connection, app_handle: &tauri::AppHandle) -> anyhow::R
                 if let Ok(sql) = fs::read_to_string(&migration_path) {
                     // Execute migration in a transaction
                     let tx = conn.unchecked_transaction()?;
-                    tx.execute_batch(&sql)?;
+                    
+                    // For migration 0004_add_recurrence.sql, check if columns exist first
+                    if migration_file == "0004_add_recurrence.sql" {
+                        // Check if recurrence columns already exist
+                        let columns: Vec<String> = tx
+                            .prepare("SELECT name FROM pragma_table_info('tasks')")?
+                            .query_map([], |row| Ok(row.get::<_, String>(0)?))?
+                            .collect::<SqlResult<Vec<String>>>()?;
+                        
+                        let has_recurrence_type = columns.contains(&"recurrence_type".to_string());
+                        let has_recurrence_interval = columns.contains(&"recurrence_interval".to_string());
+                        let has_recurrence_parent_id = columns.contains(&"recurrence_parent_id".to_string());
+                        
+                        // Only execute ALTER TABLE statements for missing columns
+                        if !has_recurrence_type {
+                            tx.execute("ALTER TABLE tasks ADD COLUMN recurrence_type TEXT DEFAULT 'none'", [])?;
+                        }
+                        if !has_recurrence_interval {
+                            tx.execute("ALTER TABLE tasks ADD COLUMN recurrence_interval INTEGER DEFAULT 1", [])?;
+                        }
+                        if !has_recurrence_parent_id {
+                            tx.execute("ALTER TABLE tasks ADD COLUMN recurrence_parent_id TEXT", [])?;
+                        }
+                    } else {
+                        // For other migrations, execute SQL as-is
+                        tx.execute_batch(&sql)?;
+                    }
                     
                     // Record migration
                     let now = SystemTime::now()
@@ -118,13 +144,41 @@ fn run_migrations(conn: &Connection, app_handle: &tauri::AppHandle) -> anyhow::R
         }
     }
     
-    // Fallback: if no migrations were applied and tables don't exist, create them directly
+    // Ensure recurrence columns exist even if migration wasn't found/applied
+    // This is a safety check to handle cases where migration system fails
     let tables_exist: bool = conn.query_row(
         "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='tasks'",
         [],
         |row| Ok(row.get::<_, i64>(0)? > 0),
     )?;
     
+    if tables_exist {
+        // Check if recurrence columns exist
+        let columns: Vec<String> = conn
+            .prepare("SELECT name FROM pragma_table_info('tasks')")?
+            .query_map([], |row| Ok(row.get::<_, String>(0)?))?
+            .collect::<SqlResult<Vec<String>>>()?;
+        
+        let has_recurrence_type = columns.contains(&"recurrence_type".to_string());
+        let has_recurrence_interval = columns.contains(&"recurrence_interval".to_string());
+        let has_recurrence_parent_id = columns.contains(&"recurrence_parent_id".to_string());
+        
+        // Add missing columns
+        if !has_recurrence_type {
+            conn.execute("ALTER TABLE tasks ADD COLUMN recurrence_type TEXT DEFAULT 'none'", [])
+                .map_err(|e| anyhow::anyhow!("Failed to add recurrence_type column: {}", e))?;
+        }
+        if !has_recurrence_interval {
+            conn.execute("ALTER TABLE tasks ADD COLUMN recurrence_interval INTEGER DEFAULT 1", [])
+                .map_err(|e| anyhow::anyhow!("Failed to add recurrence_interval column: {}", e))?;
+        }
+        if !has_recurrence_parent_id {
+            conn.execute("ALTER TABLE tasks ADD COLUMN recurrence_parent_id TEXT", [])
+                .map_err(|e| anyhow::anyhow!("Failed to add recurrence_parent_id column: {}", e))?;
+        }
+    }
+    
+    // Fallback: if no migrations were applied and tables don't exist, create them directly
     if !tables_exist && applied.is_empty() {
         // Create tables directly as fallback
         conn.execute_batch(
@@ -147,6 +201,9 @@ fn run_migrations(conn: &Connection, app_handle: &tauri::AppHandle) -> anyhow::R
                 project_id TEXT,
                 order_index INTEGER DEFAULT 0,
                 metadata TEXT,
+                recurrence_type TEXT DEFAULT 'none',
+                recurrence_interval INTEGER DEFAULT 1,
+                recurrence_parent_id TEXT,
                 FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL
             );
             CREATE TABLE IF NOT EXISTS settings (

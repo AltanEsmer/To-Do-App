@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 import * as tauriAdapter from '../api/tauriAdapter'
 
 export interface Project {
@@ -31,12 +32,14 @@ function convertProject(project: tauriAdapter.Project): Project {
   }
 }
 
-export const useProjects = create<ProjectsState>((set, get) => ({
-  projects: [],
-  loading: false,
-  error: null,
+export const useProjects = create<ProjectsState>()(
+  persist(
+    (set, get) => ({
+      projects: [],
+      loading: false,
+      error: null,
 
-  syncProjects: async () => {
+      syncProjects: async () => {
     set({ loading: true, error: null })
     try {
       const rustProjects = await tauriAdapter.getProjects()
@@ -103,5 +106,11 @@ export const useProjects = create<ProjectsState>((set, get) => ({
   getProjectById: (id) => {
     return get().projects.find((project) => project.id === id)
   },
-}))
+    }),
+    {
+      name: 'projects-storage',
+      partialize: (state) => ({ projects: state.projects }),
+    }
+  )
+)
 

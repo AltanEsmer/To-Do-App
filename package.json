@@ -6,8 +6,8 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri:dev": ".\\run-tauri-dev.cmd",
-    "tauri:build": ".\\run-tauri-build.cmd",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\"",
@@ -16,15 +16,17 @@
     "prepare": "husky install"
   },
   "dependencies": {
+    "@radix-ui/react-checkbox": "^1.0.6",
+    "@radix-ui/react-dialog": "^1.0.5",
+    "clsx": "^2.0.0",
+    "date-fns": "^2.30.0",
+    "framer-motion": "^10.16.16",
+    "lucide-react": "^0.552.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.20.0",
-    "zustand": "^4.4.7",
-    "framer-motion": "^10.16.16",
-    "@radix-ui/react-dialog": "^1.0.5",
-    "@radix-ui/react-checkbox": "^1.0.6",
-    "clsx": "^2.0.0",
-    "date-fns": "^2.30.0"
+    "recharts": "^3.3.0",
+    "zustand": "^4.4.7"
   },
   "devDependencies": {
     "@tauri-apps/api": "^1.5.1",
@@ -46,6 +48,14 @@
     "typescript": "^5.2.2",
     "vite": "^5.0.8",
     "vitest": "^1.0.4"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{css,md,json}": [
+      "prettier --write"
+    ]
   }
 }
-

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { X, Paperclip } from 'lucide-react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { Task } from '../store/useTasks'
 import * as tauriAdapter from '../api/tauriAdapter'
@@ -152,19 +153,7 @@ export function TaskDetailsModal({ task, open, onOpenChange }: TaskDetailsModalP
                                 className="ml-2 text-red-600 hover:text-red-700"
                                 aria-label={`Delete ${attachment.filename}`}
                               >
-                                <svg
-                                  className="h-4 w-4"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  viewBox="0 0 24 24"
-                                >
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M6 18L18 6M6 6l12 12"
-                                  />
-                                </svg>
+                                <X className="h-4 w-4" />
                               </button>
                             </div>
                           ))}

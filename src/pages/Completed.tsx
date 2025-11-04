@@ -1,5 +1,7 @@
+import { CheckCircle2 } from 'lucide-react'
 import { useTasks } from '../store/useTasks'
 import { TaskCard } from '../components/TaskCard'
+import { EmptyState } from '../components/EmptyState'
 
 /**
  * Completed page showing archived/completed tasks
@@ -25,9 +27,11 @@ export function Completed() {
             ))}
           </div>
         ) : (
-          <div className="flex flex-col items-center justify-center py-12 text-center">
-            <p className="text-muted-foreground">No completed tasks yet.</p>
-          </div>
+          <EmptyState
+            icon={CheckCircle2}
+            title="No completed tasks yet"
+            description="Complete tasks to see them here. Keep up the good work!"
+          />
         )}
       </div>
     </div>

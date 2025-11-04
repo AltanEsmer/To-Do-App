@@ -12,6 +12,9 @@ export interface Task {
   updated_at: number;
   project_id?: string;
   order_index: number;
+  recurrence_type: string;
+  recurrence_interval: number;
+  recurrence_parent_id?: string;
 }
 
 export interface Project {
@@ -52,6 +55,8 @@ export interface CreateTaskInput {
   due_date?: number;
   priority: string;
   project_id?: string;
+  recurrence_type?: string;
+  recurrence_interval?: number;
 }
 
 export interface UpdateTaskInput {
@@ -61,6 +66,8 @@ export interface UpdateTaskInput {
   priority?: string;
   project_id?: string;
   order_index?: number;
+  recurrence_type?: string;
+  recurrence_interval?: number;
 }
 
 export interface CreateProjectInput {

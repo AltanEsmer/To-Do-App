@@ -31,13 +31,35 @@ module.exports = {
       spacing: {
         '18': '4.5rem',
         '88': '22rem',
+        '128': '32rem',
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
       },
+      fontSize: {
+        '2xs': ['0.625rem', { lineHeight: '0.875rem' }],
+      },
+      lineHeight: {
+        'relaxed': '1.75',
+        'loose': '2',
+      },
+      letterSpacing: {
+        'wide': '0.02em',
+        'wider': '0.05em',
+      },
       borderRadius: {
         'xl': '0.75rem',
         '2xl': '1rem',
+        '3xl': '1.5rem',
+      },
+      boxShadow: {
+        'soft': '0 2px 8px rgba(0, 0, 0, 0.04)',
+        'medium': '0 4px 16px rgba(0, 0, 0, 0.08)',
+        'strong': '0 8px 32px rgba(0, 0, 0, 0.12)',
+      },
+      transitionDuration: {
+        '250': '250ms',
+        '350': '350ms',
       },
     },
   },

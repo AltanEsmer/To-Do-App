@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
+import { Check, X } from 'lucide-react'
 import { useTasks, Task } from '../store/useTasks'
 import { formatTaskDate, isOverdue } from '../utils/dateHelpers'
 import { TaskDetailsModal } from './TaskDetailsModal'
@@ -30,8 +31,10 @@ export function TaskCard({ task }: TaskCardProps) {
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.95 }}
+      whileHover={{ scale: 1.01 }}
+      transition={{ duration: 0.2 }}
       className={clsx(
-        'group flex items-start gap-3 rounded-xl border border-border bg-card p-4 transition-colors hover:border-primary-300 dark:hover:border-primary-700',
+        'group flex items-start gap-3 rounded-xl border border-border bg-card p-4 transition-all hover:border-primary-300 hover:shadow-md dark:hover:border-primary-700',
         task.completed && 'opacity-60'
       )}
     >
@@ -42,13 +45,19 @@ export function TaskCard({ task }: TaskCardProps) {
             console.error('Failed to toggle task:', error)
           })
         }}
-        className="focus-ring mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 border-border bg-background transition-colors data-[state=checked]:bg-primary-500 data-[state=checked]:border-primary-500"
+        className="focus-ring mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 border-border bg-background transition-all duration-200 hover:border-primary-400 data-[state=checked]:bg-primary-500 data-[state=checked]:border-primary-500"
         aria-label={`Mark "${task.title}" as ${task.completed ? 'incomplete' : 'complete'}`}
       >
-        <Checkbox.Indicator className="text-white">
-          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-          </svg>
+        <Checkbox.Indicator asChild>
+          <motion.div
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            exit={{ scale: 0 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+            className="text-white"
+          >
+            <Check className="h-3.5 w-3.5" strokeWidth={3} />
+          </motion.div>
         </Checkbox.Indicator>
       </Checkbox.Root>
 
@@ -78,7 +87,7 @@ export function TaskCard({ task }: TaskCardProps) {
           )}
           <span
             className={clsx(
-              'rounded-full px-2 py-0.5 text-xs font-medium',
+              'rounded-full px-2 py-0.5 text-xs font-medium transition-colors duration-200',
               priorityColors[task.priority]
             )}
           >
@@ -87,19 +96,19 @@ export function TaskCard({ task }: TaskCardProps) {
         </div>
       </div>
 
-      <button
+      <motion.button
         onClick={() => {
           deleteTask(task.id).catch((error) => {
             console.error('Failed to delete task:', error)
           })
         }}
+        whileHover={{ scale: 1.1 }}
+        whileTap={{ scale: 0.95 }}
         className="focus-ring opacity-0 transition-opacity group-hover:opacity-100"
         aria-label={`Delete task "${task.title}"`}
       >
-        <svg className="h-4 w-4 text-muted-foreground hover:text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-        </svg>
-      </button>
+        <X className="h-4 w-4 text-muted-foreground transition-colors hover:text-red-600" />
+      </motion.button>
 
       <TaskDetailsModal task={task} open={detailsOpen} onOpenChange={setDetailsOpen} />
     </motion.div>
