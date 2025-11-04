@@ -26,7 +26,7 @@
   }
 
   .dark {
-    /* Dark theme colors */
+    /* Dark theme colors - Pure dark professional theme */
     --color-primary-50: #0c4a6e;
     --color-primary-100: #075985;
     --color-primary-200: #0369a1;
@@ -38,13 +38,13 @@
     --color-primary-800: #e0f2fe;
     --color-primary-900: #f0f9ff;
 
-    --color-background: #0f172a;
-    --color-foreground: #f8fafc;
-    --color-card: #1e293b;
-    --color-card-foreground: #f8fafc;
-    --color-border: #334155;
-    --color-muted: #1e293b;
-    --color-muted-foreground: #94a3b8;
+    --color-background: #000000;
+    --color-foreground: #ffffff;
+    --color-card: #1a1a1a;
+    --color-card-foreground: #ffffff;
+    --color-border: #2a2a2a;
+    --color-muted: #1a1a1a;
+    --color-muted-foreground: #a0a0a0;
   }
 
   * {

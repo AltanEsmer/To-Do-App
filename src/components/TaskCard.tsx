@@ -1,6 +1,8 @@
+import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { useTasks, Task } from '../store/useTasks'
 import { formatTaskDate, isOverdue } from '../utils/dateHelpers'
+import { TaskDetailsModal } from './TaskDetailsModal'
 import clsx from 'clsx'
 import * as Checkbox from '@radix-ui/react-checkbox'
 
@@ -13,6 +15,7 @@ interface TaskCardProps {
  */
 export function TaskCard({ task }: TaskCardProps) {
   const { toggleComplete, deleteTask } = useTasks()
+  const [detailsOpen, setDetailsOpen] = useState(false)
   const isOverdueTask = task.dueDate && !task.completed && isOverdue(task.dueDate)
 
   const priorityColors = {
@@ -34,7 +37,11 @@ export function TaskCard({ task }: TaskCardProps) {
     >
       <Checkbox.Root
         checked={task.completed}
-        onCheckedChange={() => toggleComplete(task.id)}
+        onCheckedChange={() => {
+          toggleComplete(task.id).catch((error) => {
+            console.error('Failed to toggle task:', error)
+          })
+        }}
         className="focus-ring mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 border-border bg-background transition-colors data-[state=checked]:bg-primary-500 data-[state=checked]:border-primary-500"
         aria-label={`Mark "${task.title}" as ${task.completed ? 'incomplete' : 'complete'}`}
       >
@@ -47,8 +54,9 @@ export function TaskCard({ task }: TaskCardProps) {
 
       <div className="flex-1 min-w-0">
         <h3
+          onClick={() => setDetailsOpen(true)}
           className={clsx(
-            'text-sm font-medium',
+            'cursor-pointer text-sm font-medium hover:text-primary-500',
             task.completed ? 'text-muted-foreground line-through' : 'text-foreground'
           )}
         >
@@ -80,7 +88,11 @@ export function TaskCard({ task }: TaskCardProps) {
       </div>
 
       <button
-        onClick={() => deleteTask(task.id)}
+        onClick={() => {
+          deleteTask(task.id).catch((error) => {
+            console.error('Failed to delete task:', error)
+          })
+        }}
         className="focus-ring opacity-0 transition-opacity group-hover:opacity-100"
         aria-label={`Delete task "${task.title}"`}
       >
@@ -88,6 +100,8 @@ export function TaskCard({ task }: TaskCardProps) {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
         </svg>
       </button>
+
+      <TaskDetailsModal task={task} open={detailsOpen} onOpenChange={setDetailsOpen} />
     </motion.div>
   )
 }

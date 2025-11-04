@@ -27,24 +27,29 @@ export function AddTaskModal({ open, onOpenChange }: AddTaskModalProps) {
     }
   }, [open])
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!title.trim()) return
 
-    addTask({
-      title: title.trim(),
-      description: description.trim() || undefined,
-      dueDate: dueDate ? new Date(dueDate) : undefined,
-      priority,
-      completed: false,
-    })
+    try {
+      await addTask({
+        title: title.trim(),
+        description: description.trim() || undefined,
+        dueDate: dueDate ? new Date(dueDate) : undefined,
+        priority,
+        completed: false,
+      })
 
-    // Reset form
-    setTitle('')
-    setDescription('')
-    setDueDate('')
-    setPriority('medium')
-    onOpenChange(false)
+      // Reset form
+      setTitle('')
+      setDescription('')
+      setDueDate('')
+      setPriority('medium')
+      onOpenChange(false)
+    } catch (error) {
+      console.error('Failed to add task:', error)
+      // Could show an error toast here
+    }
   }
 
   const handleCancel = () => {
@@ -71,95 +76,107 @@ export function AddTaskModal({ open, onOpenChange }: AddTaskModalProps) {
               </Dialog.Overlay>
               <Dialog.Content asChild>
                 <motion.div
-                  initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                  className="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-border bg-card p-6 shadow-xl"
+                  initial={{ opacity: 0, scale: 0.95, y: '-45%' }}
+                  animate={{ opacity: 1, scale: 1, y: '-50%' }}
+                  exit={{ opacity: 0, scale: 0.95, y: '-45%' }}
+                  className="fixed z-50 w-full rounded-2xl border border-border bg-card shadow-xl flex flex-col"
+                  style={{ 
+                    left: '50%',
+                    top: '50%',
+                    x: '-50%',
+                    maxHeight: 'calc(100vh - 3rem)',
+                    maxWidth: '28rem',
+                    width: '90%'
+                  }}
                 >
-                  <Dialog.Title className="mb-4 text-lg font-semibold text-foreground">
-                    Add New Task
-                  </Dialog.Title>
-                  <form onSubmit={handleSubmit}>
-                    <div className="space-y-4">
-                      <div>
-                        <label htmlFor="task-title" className="mb-1 block text-sm font-medium text-foreground">
-                          Title <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          ref={titleInputRef}
-                          id="task-title"
-                          type="text"
-                          value={title}
-                          onChange={(e) => setTitle(e.target.value)}
-                          className="focus-ring w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground"
-                          placeholder="Enter task title"
-                          required
-                          aria-required="true"
-                        />
-                      </div>
-
-                      <div>
-                        <label htmlFor="task-description" className="mb-1 block text-sm font-medium text-foreground">
-                          Description
-                        </label>
-                        <textarea
-                          id="task-description"
-                          value={description}
-                          onChange={(e) => setDescription(e.target.value)}
-                          rows={3}
-                          className="focus-ring w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground"
-                          placeholder="Add details (optional)"
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4">
+                  <div className="p-6 flex-shrink-0">
+                    <Dialog.Title className="mb-4 text-lg font-semibold text-foreground">
+                      Add New Task
+                    </Dialog.Title>
+                  </div>
+                  <div className="px-6 pb-6 flex-1 overflow-y-auto">
+                    <form onSubmit={handleSubmit}>
+                      <div className="space-y-4">
                         <div>
-                          <label htmlFor="task-due-date" className="mb-1 block text-sm font-medium text-foreground">
-                            Due Date
+                          <label htmlFor="task-title" className="mb-1 block text-sm font-medium text-foreground">
+                            Title <span className="text-red-500">*</span>
                           </label>
                           <input
-                            id="task-due-date"
-                            type="date"
-                            value={dueDate}
-                            onChange={(e) => setDueDate(e.target.value)}
-                            className="focus-ring w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
+                            ref={titleInputRef}
+                            id="task-title"
+                            type="text"
+                            value={title}
+                            onChange={(e) => setTitle(e.target.value)}
+                            className="focus-ring w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground"
+                            placeholder="Enter task title"
+                            required
+                            aria-required="true"
                           />
                         </div>
 
                         <div>
-                          <label htmlFor="task-priority" className="mb-1 block text-sm font-medium text-foreground">
-                            Priority
+                          <label htmlFor="task-description" className="mb-1 block text-sm font-medium text-foreground">
+                            Description
                           </label>
-                          <select
-                            id="task-priority"
-                            value={priority}
-                            onChange={(e) => setPriority(e.target.value as TaskPriority)}
-                            className="focus-ring w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
-                          >
-                            <option value="low">Low</option>
-                            <option value="medium">Medium</option>
-                            <option value="high">High</option>
-                          </select>
+                          <textarea
+                            id="task-description"
+                            value={description}
+                            onChange={(e) => setDescription(e.target.value)}
+                            rows={3}
+                            className="focus-ring w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground"
+                            placeholder="Add details (optional)"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label htmlFor="task-due-date" className="mb-1 block text-sm font-medium text-foreground">
+                              Due Date
+                            </label>
+                            <input
+                              id="task-due-date"
+                              type="date"
+                              value={dueDate}
+                              onChange={(e) => setDueDate(e.target.value)}
+                              className="focus-ring w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
+                            />
+                          </div>
+
+                          <div>
+                            <label htmlFor="task-priority" className="mb-1 block text-sm font-medium text-foreground">
+                              Priority
+                            </label>
+                            <select
+                              id="task-priority"
+                              value={priority}
+                              onChange={(e) => setPriority(e.target.value as TaskPriority)}
+                              className="focus-ring w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
+                            >
+                              <option value="low">Low</option>
+                              <option value="medium">Medium</option>
+                              <option value="high">High</option>
+                            </select>
+                          </div>
                         </div>
                       </div>
-                    </div>
 
-                    <div className="mt-6 flex justify-end gap-3">
-                      <button
-                        type="button"
-                        onClick={handleCancel}
-                        className="focus-ring rounded-lg px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        className="focus-ring rounded-lg bg-primary-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-600"
-                      >
-                        Add Task
-                      </button>
-                    </div>
-                  </form>
+                      <div className="mt-6 flex justify-end gap-3">
+                        <button
+                          type="button"
+                          onClick={handleCancel}
+                          className="focus-ring rounded-lg px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          className="focus-ring rounded-lg bg-primary-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-600"
+                        >
+                          Add Task
+                        </button>
+                      </div>
+                    </form>
+                  </div>
                 </motion.div>
               </Dialog.Content>
             </>

@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { addDays, startOfDay } from 'date-fns'
+import * as tauriAdapter from '../api/tauriAdapter'
 
 export type TaskPriority = 'low' | 'medium' | 'high'
 
@@ -12,99 +12,130 @@ export interface Task {
   priority: TaskPriority
   createdAt: Date
   updatedAt: Date
+  projectId?: string
+  orderIndex?: number
 }
 
 interface TasksState {
   tasks: Task[]
-  addTask: (task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>) => void
-  updateTask: (id: string, updates: Partial<Omit<Task, 'id' | 'createdAt'>>) => void
-  toggleComplete: (id: string) => void
-  deleteTask: (id: string) => void
+  loading: boolean
+  error: string | null
+  syncTasks: () => Promise<void>
+  addTask: (task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>
+  updateTask: (id: string, updates: Partial<Omit<Task, 'id' | 'createdAt'>>) => Promise<void>
+  toggleComplete: (id: string) => Promise<void>
+  deleteTask: (id: string) => Promise<void>
   getTaskById: (id: string) => Task | undefined
 }
 
-// Mock seed data
-const createMockTask = (
-  title: string,
-  completed: boolean,
-  dueDate?: Date,
-  priority: TaskPriority = 'medium'
-): Task => {
-  const now = new Date()
+// Convert Rust Task to frontend Task
+function convertTask(task: tauriAdapter.Task): Task {
   return {
-    id: crypto.randomUUID(),
-    title,
-    completed,
-    dueDate,
-    priority,
-    createdAt: now,
-    updatedAt: now,
+    id: task.id,
+    title: task.title,
+    description: task.description,
+    completed: task.completed,
+    dueDate: task.due_date ? new Date(task.due_date * 1000) : undefined,
+    priority: task.priority as TaskPriority,
+    createdAt: new Date(task.created_at * 1000),
+    updatedAt: new Date(task.updated_at * 1000),
+    projectId: task.project_id,
+    orderIndex: task.order_index,
   }
 }
 
-const initialTasks: Task[] = [
-  createMockTask('Complete project setup', false, startOfDay(new Date()), 'high'),
-  createMockTask('Review design mockups', false, addDays(startOfDay(new Date()), 2), 'medium'),
-  createMockTask('Write documentation', true, addDays(startOfDay(new Date()), -1), 'low'),
-  createMockTask('Schedule team meeting', false, addDays(startOfDay(new Date()), 5), 'medium'),
-  createMockTask('Fix bug in authentication', true, startOfDay(new Date()), 'high'),
-]
-
 export const useTasks = create<TasksState>((set, get) => ({
-  tasks: initialTasks.map((task) => ({
-    ...task,
-    dueDate: task.dueDate ? new Date(task.dueDate) : undefined,
-    createdAt: new Date(task.createdAt),
-    updatedAt: new Date(task.updatedAt),
-  })),
+  tasks: [],
+  loading: false,
+  error: null,
 
-  addTask: (taskData) => {
-    const now = new Date()
-    const newTask: Task = {
-      ...taskData,
-      id: crypto.randomUUID(),
-      createdAt: now,
-      updatedAt: now,
-      dueDate: taskData.dueDate ? new Date(taskData.dueDate) : undefined,
+  syncTasks: async () => {
+    set({ loading: true, error: null })
+    try {
+      const rustTasks = await tauriAdapter.getTasks()
+      const tasks = rustTasks.map(convertTask)
+      set({ tasks, loading: false })
+    } catch (error) {
+      set({
+        error: error instanceof Error ? error.message : 'Failed to sync tasks',
+        loading: false,
+      })
     }
-    set((state) => ({
-      tasks: [...state.tasks, newTask],
-    }))
   },
 
-  updateTask: (id, updates) => {
-    set((state) => ({
-      tasks: state.tasks.map((task) =>
-        task.id === id
-          ? {
-              ...task,
-              ...updates,
-              updatedAt: new Date(),
-              dueDate: updates.dueDate ? new Date(updates.dueDate) : task.dueDate,
-            }
-          : task
-      ),
-    }))
+  addTask: async (taskData) => {
+    try {
+      const rustTask = await tauriAdapter.createTask({
+        title: taskData.title,
+        description: taskData.description,
+        due_date: taskData.dueDate ? Math.floor(taskData.dueDate.getTime() / 1000) : undefined,
+        priority: taskData.priority,
+        project_id: taskData.projectId,
+      })
+      const newTask = convertTask(rustTask)
+      set((state) => ({
+        tasks: [...state.tasks, newTask],
+      }))
+    } catch (error) {
+      set({
+        error: error instanceof Error ? error.message : 'Failed to create task',
+      })
+      throw error
+    }
   },
 
-  toggleComplete: (id) => {
-    set((state) => ({
-      tasks: state.tasks.map((task) =>
-        task.id === id
-          ? { ...task, completed: !task.completed, updatedAt: new Date() }
-          : task
-      ),
-    }))
+  updateTask: async (id, updates) => {
+    try {
+      const rustTask = await tauriAdapter.updateTask(id, {
+        title: updates.title,
+        description: updates.description,
+        due_date: updates.dueDate ? Math.floor(updates.dueDate.getTime() / 1000) : undefined,
+        priority: updates.priority,
+        project_id: updates.projectId,
+        order_index: updates.orderIndex,
+      })
+      const updatedTask = convertTask(rustTask)
+      set((state) => ({
+        tasks: state.tasks.map((task) => (task.id === id ? updatedTask : task)),
+      }))
+    } catch (error) {
+      set({
+        error: error instanceof Error ? error.message : 'Failed to update task',
+      })
+      throw error
+    }
   },
 
-  deleteTask: (id) => {
-    set((state) => ({
-      tasks: state.tasks.filter((task) => task.id !== id),
-    }))
+  toggleComplete: async (id) => {
+    try {
+      const rustTask = await tauriAdapter.toggleComplete(id)
+      const updatedTask = convertTask(rustTask)
+      set((state) => ({
+        tasks: state.tasks.map((task) => (task.id === id ? updatedTask : task)),
+      }))
+    } catch (error) {
+      set({
+        error: error instanceof Error ? error.message : 'Failed to toggle task',
+      })
+      throw error
+    }
+  },
+
+  deleteTask: async (id) => {
+    try {
+      await tauriAdapter.deleteTask(id)
+      set((state) => ({
+        tasks: state.tasks.filter((task) => task.id !== id),
+      }))
+    } catch (error) {
+      set({
+        error: error instanceof Error ? error.message : 'Failed to delete task',
+      })
+      throw error
+    }
   },
 
   getTaskById: (id) => {
     return get().tasks.find((task) => task.id === id)
   },
 }))
-
