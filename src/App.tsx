@@ -6,6 +6,7 @@ import { Dashboard } from './pages/Dashboard'
 import { Projects } from './pages/Projects'
 import { Completed } from './pages/Completed'
 import { Settings } from './pages/Settings'
+import { Statistics } from './pages/Statistics'
 import { useTasks } from './store/useTasks'
 import { isTauri } from './utils/tauri'
 
@@ -52,6 +53,7 @@ function App() {
               <Route path="/" element={<Dashboard />} />
               <Route path="/projects" element={<Projects />} />
               <Route path="/completed" element={<Completed />} />
+              <Route path="/statistics" element={<Statistics />} />
               <Route path="/settings" element={<Settings />} />
             </Routes>
           </main>

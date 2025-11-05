@@ -20,6 +20,8 @@ export interface Task {
   recurrenceType: RecurrenceType
   recurrenceInterval: number
   recurrenceParentId?: string
+  reminderMinutesBefore?: number
+  notificationRepeat?: boolean
 }
 
 interface TasksState {
@@ -50,6 +52,8 @@ function convertTask(task: tauriAdapter.Task): Task {
     recurrenceType: (task.recurrence_type as RecurrenceType) || 'none',
     recurrenceInterval: task.recurrence_interval || 1,
     recurrenceParentId: task.recurrence_parent_id,
+    reminderMinutesBefore: task.reminder_minutes_before,
+    notificationRepeat: task.notification_repeat,
   }
 }
 
@@ -84,6 +88,8 @@ export const useTasks = create<TasksState>()(
         project_id: taskData.projectId,
         recurrence_type: taskData.recurrenceType || 'none',
         recurrence_interval: taskData.recurrenceInterval || 1,
+        reminder_minutes_before: taskData.reminderMinutesBefore,
+        notification_repeat: taskData.notificationRepeat,
       })
       const newTask = convertTask(rustTask)
       set((state) => ({
@@ -108,6 +114,8 @@ export const useTasks = create<TasksState>()(
         order_index: updates.orderIndex,
         recurrence_type: updates.recurrenceType !== undefined ? updates.recurrenceType : undefined,
         recurrence_interval: updates.recurrenceInterval !== undefined ? updates.recurrenceInterval : undefined,
+        reminder_minutes_before: updates.reminderMinutesBefore,
+        notification_repeat: updates.notificationRepeat,
       })
       const updatedTask = convertTask(rustTask)
       set((state) => ({
@@ -158,6 +166,19 @@ export const useTasks = create<TasksState>()(
       name: 'tasks-storage',
       // Only persist tasks array, not loading/error states
       partialize: (state) => ({ tasks: state.tasks }),
+      // Merge function to restore Date objects from strings
+      merge: (persistedState, currentState) => {
+        const state = persistedState as any
+        if (state?.tasks && Array.isArray(state.tasks)) {
+          state.tasks = state.tasks.map((task: any) => ({
+            ...task,
+            createdAt: task.createdAt ? new Date(task.createdAt) : new Date(),
+            updatedAt: task.updatedAt ? new Date(task.updatedAt) : new Date(),
+            dueDate: task.dueDate ? new Date(task.dueDate) : undefined,
+          }))
+        }
+        return { ...currentState, ...state }
+      },
     }
   )
 )

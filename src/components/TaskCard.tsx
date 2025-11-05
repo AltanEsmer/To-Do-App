@@ -31,10 +31,16 @@ export function TaskCard({ task }: TaskCardProps) {
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.95 }}
-      whileHover={{ scale: 1.01 }}
+      whileHover={{ 
+        y: -2,
+        transition: { duration: 0.2, ease: 'easeOut' }
+      }}
       transition={{ duration: 0.2 }}
       className={clsx(
-        'group flex items-start gap-3 rounded-xl border border-border bg-card p-4 transition-all hover:border-primary-300 hover:shadow-md dark:hover:border-primary-700',
+        'group flex items-start gap-3 rounded-xl border border-border bg-card p-4 transition-all duration-200',
+        'hover:border-primary-300 hover:shadow-xl hover:shadow-primary-500/10',
+        'dark:hover:border-primary-700 dark:hover:shadow-primary-500/5',
+        'hover:bg-card/95',
         task.completed && 'opacity-60'
       )}
     >

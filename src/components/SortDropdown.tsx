@@ -1,3 +1,4 @@
+import { forwardRef } from 'react'
 import { ArrowUpDown } from 'lucide-react'
 import { useTaskFilters, SortType } from '../store/useTaskFilters'
 
@@ -21,7 +22,7 @@ interface SortDropdownProps {
 /**
  * Sort dropdown component for task sorting
  */
-export function SortDropdown({ className = '' }: SortDropdownProps) {
+export const SortDropdown = forwardRef<HTMLSelectElement, SortDropdownProps>(({ className = '' }, ref) => {
   const { sortBy, setSortBy } = useTaskFilters()
 
   const currentLabel = sortOptions.find((opt) => opt.value === sortBy)?.label || 'Date Created'
@@ -34,6 +35,7 @@ export function SortDropdown({ className = '' }: SortDropdownProps) {
       <div className="flex items-center gap-2">
         <ArrowUpDown className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
         <select
+          ref={ref}
           id="sort-select"
           value={sortBy}
           onChange={(e) => setSortBy(e.target.value as SortType)}
@@ -48,5 +50,5 @@ export function SortDropdown({ className = '' }: SortDropdownProps) {
       </div>
     </div>
   )
-}
+})
 

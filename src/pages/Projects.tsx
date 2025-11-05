@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { ListTodo } from 'lucide-react'
 import { useTasks } from '../store/useTasks'
 import { TaskCard } from '../components/TaskCard'
@@ -8,6 +8,8 @@ import { SearchBar } from '../components/SearchBar'
 import { FilterBar } from '../components/FilterBar'
 import { SortDropdown } from '../components/SortDropdown'
 import { useFilteredTasks } from '../utils/useFilteredTasks'
+import { useKeyboardShortcuts } from '../utils/useKeyboardShortcuts'
+import { KeyboardShortcutsModal } from '../components/KeyboardShortcutsModal'
 
 /**
  * Projects page showing all tasks (incomplete and completed)
@@ -15,10 +17,22 @@ import { useFilteredTasks } from '../utils/useFilteredTasks'
 export function Projects() {
   const { tasks } = useTasks()
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isShortcutsOpen, setIsShortcutsOpen] = useState(false)
+  const searchInputRef = useRef<HTMLInputElement>(null)
+  const filterInputRef = useRef<HTMLButtonElement>(null)
+  const sortInputRef = useRef<HTMLSelectElement>(null)
 
   const filteredTasks = useFilteredTasks(tasks)
   const incompleteTasks = filteredTasks.filter((task) => !task.completed)
   const completedTasks = filteredTasks.filter((task) => task.completed)
+
+  useKeyboardShortcuts({
+    onQuickAdd: () => setIsModalOpen(true),
+    onSearchFocus: () => searchInputRef.current?.focus(),
+    onFilterFocus: () => filterInputRef.current?.focus(),
+    onSortFocus: () => sortInputRef.current?.focus(),
+    onShowShortcuts: () => setIsShortcutsOpen(true),
+  })
 
   return (
     <div className="flex h-full flex-col">
@@ -39,10 +53,10 @@ export function Projects() {
       </div>
 
       <div className="mb-4 space-y-3">
-        <SearchBar />
+        <SearchBar ref={searchInputRef} />
         <div className="flex flex-wrap items-center gap-4">
-          <FilterBar />
-          <SortDropdown />
+          <FilterBar ref={filterInputRef} />
+          <SortDropdown ref={sortInputRef} />
         </div>
       </div>
 
@@ -91,6 +105,7 @@ export function Projects() {
       </div>
 
       <AddTaskModal open={isModalOpen} onOpenChange={setIsModalOpen} />
+      <KeyboardShortcutsModal open={isShortcutsOpen} onOpenChange={setIsShortcutsOpen} />
     </div>
   )
 }

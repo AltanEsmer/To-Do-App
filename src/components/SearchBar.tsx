@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, forwardRef } from 'react'
 import { Search, X } from 'lucide-react'
 import { useTaskFilters } from '../store/useTaskFilters'
 
@@ -9,7 +9,7 @@ interface SearchBarProps {
 /**
  * Search bar component with debounced input for task search
  */
-export function SearchBar({ className = '' }: SearchBarProps) {
+export const SearchBar = forwardRef<HTMLInputElement, SearchBarProps>(({ className = '' }, ref) => {
   const { searchQuery, setSearchQuery } = useTaskFilters()
   const [localQuery, setLocalQuery] = useState(searchQuery)
 
@@ -28,6 +28,7 @@ export function SearchBar({ className = '' }: SearchBarProps) {
         <Search className="h-4 w-4 text-muted-foreground" />
       </div>
       <input
+        ref={ref}
         type="text"
         value={localQuery}
         onChange={(e) => setLocalQuery(e.target.value)}
@@ -46,5 +47,5 @@ export function SearchBar({ className = '' }: SearchBarProps) {
       )}
     </div>
   )
-}
+})
 

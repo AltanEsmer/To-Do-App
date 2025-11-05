@@ -1,8 +1,9 @@
 use crate::db::DbConnection;
+use crate::services::stats_service;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::State;
 
@@ -22,6 +23,8 @@ pub struct Task {
     pub recurrence_type: String, // none, daily, weekly, monthly, custom
     pub recurrence_interval: i32,
     pub recurrence_parent_id: Option<String>,
+    pub reminder_minutes_before: Option<i32>,
+    pub notification_repeat: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -69,6 +72,8 @@ pub struct CreateTaskInput {
     pub project_id: Option<String>,
     pub recurrence_type: Option<String>,
     pub recurrence_interval: Option<i32>,
+    pub reminder_minutes_before: Option<i32>,
+    pub notification_repeat: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -81,6 +86,8 @@ pub struct UpdateTaskInput {
     pub order_index: Option<i32>,
     pub recurrence_type: Option<String>,
     pub recurrence_interval: Option<i32>,
+    pub reminder_minutes_before: Option<i32>,
+    pub notification_repeat: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -114,7 +121,7 @@ fn now() -> i64 {
 // Helper function to fetch a task by ID (assumes lock is already held)
 fn fetch_task(conn: &rusqlite::Connection, id: &str) -> Result<Task, String> {
     conn.query_row(
-        "SELECT id, title, description, due_at, created_at, updated_at, priority, completed_at, project_id, order_index, metadata, recurrence_type, recurrence_interval, recurrence_parent_id FROM tasks WHERE id = ?1",
+        "SELECT id, title, description, due_at, created_at, updated_at, priority, completed_at, project_id, order_index, metadata, recurrence_type, recurrence_interval, recurrence_parent_id, reminder_minutes_before, notification_repeat FROM tasks WHERE id = ?1",
         params![id],
         |row| {
             Ok(Task {
@@ -131,6 +138,8 @@ fn fetch_task(conn: &rusqlite::Connection, id: &str) -> Result<Task, String> {
                 recurrence_type: row.get(11).unwrap_or_else(|_| "none".to_string()),
                 recurrence_interval: row.get(12).unwrap_or(1),
                 recurrence_parent_id: row.get(13).ok(),
+                reminder_minutes_before: row.get(14).ok().flatten(),
+                notification_repeat: row.get::<_, Option<i32>>(15).unwrap_or(None).map_or(false, |x| x != 0),
             })
         },
     ).map_err(|e| format!("Task not found: {}", e))
@@ -139,12 +148,12 @@ fn fetch_task(conn: &rusqlite::Connection, id: &str) -> Result<Task, String> {
 // Task commands
 #[tauri::command]
 pub fn get_tasks(
-    db: State<'_, Mutex<DbConnection>>,
+    db: State<'_, Arc<Mutex<DbConnection>>>,
     filter: Option<TaskFilter>,
 ) -> Result<Vec<Task>, String> {
     let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
     
-    let mut query = "SELECT id, title, description, due_at, created_at, updated_at, priority, completed_at, project_id, order_index, metadata, recurrence_type, recurrence_interval, recurrence_parent_id FROM tasks WHERE 1=1".to_string();
+    let mut query = "SELECT id, title, description, due_at, created_at, updated_at, priority, completed_at, project_id, order_index, metadata, recurrence_type, recurrence_interval, recurrence_parent_id, reminder_minutes_before, notification_repeat FROM tasks WHERE 1=1".to_string();
     let mut query_params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
     
     if let Some(f) = filter {
@@ -193,6 +202,8 @@ pub fn get_tasks(
             recurrence_type: row.get(11).unwrap_or_else(|_| "none".to_string()),
             recurrence_interval: row.get(12).unwrap_or(1),
             recurrence_parent_id: row.get(13).ok(),
+            reminder_minutes_before: row.get(14).ok().flatten(),
+            notification_repeat: row.get::<_, Option<i32>>(15).unwrap_or(None).map_or(false, |x| x != 0),
         })
     }).map_err(|e| format!("Query execution error: {}", e))?;
     
@@ -205,14 +216,14 @@ pub fn get_tasks(
 }
 
 #[tauri::command]
-pub fn get_task(db: State<'_, Mutex<DbConnection>>, id: String) -> Result<Task, String> {
+pub fn get_task(db: State<'_, Arc<Mutex<DbConnection>>>, id: String) -> Result<Task, String> {
     let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
     fetch_task(&db.conn, &id)
 }
 
 #[tauri::command]
 pub fn create_task(
-    db: State<'_, Mutex<DbConnection>>,
+    db: State<'_, Arc<Mutex<DbConnection>>>,
     input: CreateTaskInput,
 ) -> Result<Task, String> {
     let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
@@ -221,8 +232,8 @@ pub fn create_task(
     let now = now();
     
     db.conn.execute(
-        "INSERT INTO tasks (id, title, description, due_at, created_at, updated_at, priority, completed_at, project_id, order_index, metadata, recurrence_type, recurrence_interval, recurrence_parent_id)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+        "INSERT INTO tasks (id, title, description, due_at, created_at, updated_at, priority, completed_at, project_id, order_index, metadata, recurrence_type, recurrence_interval, recurrence_parent_id, reminder_minutes_before, notification_repeat)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
         params![
             id.clone(),
             input.title,
@@ -237,16 +248,23 @@ pub fn create_task(
             None::<String>,
             input.recurrence_type.unwrap_or_else(|| "none".to_string()),
             input.recurrence_interval.unwrap_or(1),
-            None::<String>
+            None::<String>,
+            input.reminder_minutes_before,
+            if input.notification_repeat.unwrap_or(false) { 1 } else { 0 }
         ],
     ).map_err(|e| format!("Failed to create task: {}", e))?;
+    
+    // Schedule notification if reminder is set
+    if let Some(reminder_minutes) = input.reminder_minutes_before {
+        let _ = crate::notifications::schedule_notification(&db, &id, Some(reminder_minutes));
+    }
     
     fetch_task(&db.conn, &id)
 }
 
 #[tauri::command]
 pub fn update_task(
-    db: State<'_, Mutex<DbConnection>>,
+    db: State<'_, Arc<Mutex<DbConnection>>>,
     id: String,
     input: UpdateTaskInput,
 ) -> Result<Task, String> {
@@ -288,6 +306,14 @@ pub fn update_task(
         updates.push("recurrence_interval = ?");
         query_params.push(Box::new(recurrence_interval));
     }
+    if let Some(reminder_minutes_before) = input.reminder_minutes_before {
+        updates.push("reminder_minutes_before = ?");
+        query_params.push(Box::new(reminder_minutes_before));
+    }
+    if let Some(notification_repeat) = input.notification_repeat {
+        updates.push("notification_repeat = ?");
+        query_params.push(Box::new(if notification_repeat { 1 } else { 0 }));
+    }
     
     if updates.is_empty() {
         return fetch_task(&db.conn, &id);
@@ -301,11 +327,31 @@ pub fn update_task(
     db.conn.execute(&query, rusqlite::params_from_iter(query_params.iter()))
         .map_err(|e| format!("Failed to update task: {}", e))?;
     
+    // Reschedule notifications if reminder settings changed
+    if input.reminder_minutes_before.is_some() || input.notification_repeat.is_some() || input.due_date.is_some() {
+        // Delete existing notifications for this task
+        let _ = db.conn.execute(
+            "DELETE FROM notification_schedule WHERE task_id = ?1",
+            params![id.clone()],
+        );
+        
+        // Schedule new notifications
+        let reminder_minutes: Option<i32> = db.conn.query_row(
+            "SELECT reminder_minutes_before FROM tasks WHERE id = ?1",
+            params![id.clone()],
+            |row| row.get(0),
+        ).ok().flatten();
+        
+        if reminder_minutes.is_some() {
+            let _ = crate::notifications::schedule_notification(&db, &id, reminder_minutes);
+        }
+    }
+    
     fetch_task(&db.conn, &id)
 }
 
 #[tauri::command]
-pub fn delete_task(db: State<'_, Mutex<DbConnection>>, id: String) -> Result<(), String> {
+pub fn delete_task(db: State<'_, Arc<Mutex<DbConnection>>>, id: String) -> Result<(), String> {
     let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
     
     db.conn.execute("DELETE FROM tasks WHERE id = ?1", params![id])
@@ -316,7 +362,7 @@ pub fn delete_task(db: State<'_, Mutex<DbConnection>>, id: String) -> Result<(),
 
 #[tauri::command]
 pub fn toggle_complete(
-    db: State<'_, Mutex<DbConnection>>,
+    db: State<'_, Arc<Mutex<DbConnection>>>,
     id: String,
 ) -> Result<Task, String> {
     let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
@@ -398,7 +444,7 @@ fn create_recurring_instance(conn: &rusqlite::Connection, parent_id: &str, recur
 
 // Project commands
 #[tauri::command]
-pub fn get_projects(db: State<'_, Mutex<DbConnection>>) -> Result<Vec<Project>, String> {
+pub fn get_projects(db: State<'_, Arc<Mutex<DbConnection>>>) -> Result<Vec<Project>, String> {
     let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
     
     let mut stmt = db.conn.prepare("SELECT id, name, color, created_at, updated_at FROM projects ORDER BY created_at").map_err(|e| format!("Query error: {}", e))?;
@@ -422,7 +468,7 @@ pub fn get_projects(db: State<'_, Mutex<DbConnection>>) -> Result<Vec<Project>, 
 
 #[tauri::command]
 pub fn create_project(
-    db: State<'_, Mutex<DbConnection>>,
+    db: State<'_, Arc<Mutex<DbConnection>>>,
     input: CreateProjectInput,
 ) -> Result<Project, String> {
     let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
@@ -452,7 +498,7 @@ pub fn create_project(
 
 #[tauri::command]
 pub fn update_project(
-    db: State<'_, Mutex<DbConnection>>,
+    db: State<'_, Arc<Mutex<DbConnection>>>,
     id: String,
     input: UpdateProjectInput,
 ) -> Result<Project, String> {
@@ -497,7 +543,7 @@ pub fn update_project(
 }
 
 #[tauri::command]
-pub fn delete_project(db: State<'_, Mutex<DbConnection>>, id: String) -> Result<(), String> {
+pub fn delete_project(db: State<'_, Arc<Mutex<DbConnection>>>, id: String) -> Result<(), String> {
     let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
     
     db.conn.execute("DELETE FROM projects WHERE id = ?1", params![id])
@@ -509,7 +555,7 @@ pub fn delete_project(db: State<'_, Mutex<DbConnection>>, id: String) -> Result<
 // Subtask commands
 #[tauri::command]
 pub fn add_subtask(
-    db: State<'_, Mutex<DbConnection>>,
+    db: State<'_, Arc<Mutex<DbConnection>>>,
     task_id: String,
     title: String,
 ) -> Result<Subtask, String> {
@@ -538,7 +584,7 @@ pub fn add_subtask(
 
 #[tauri::command]
 pub fn update_subtask(
-    db: State<'_, Mutex<DbConnection>>,
+    db: State<'_, Arc<Mutex<DbConnection>>>,
     id: String,
     title: Option<String>,
     completed: Option<bool>,
@@ -579,7 +625,7 @@ pub fn update_subtask(
 }
 
 #[tauri::command]
-pub fn delete_subtask(db: State<'_, Mutex<DbConnection>>, id: String) -> Result<(), String> {
+pub fn delete_subtask(db: State<'_, Arc<Mutex<DbConnection>>>, id: String) -> Result<(), String> {
     let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
     
     db.conn.execute("DELETE FROM subtasks WHERE id = ?1", params![id])
@@ -590,7 +636,7 @@ pub fn delete_subtask(db: State<'_, Mutex<DbConnection>>, id: String) -> Result<
 
 #[tauri::command]
 pub fn get_subtasks(
-    db: State<'_, Mutex<DbConnection>>,
+    db: State<'_, Arc<Mutex<DbConnection>>>,
     task_id: String,
 ) -> Result<Vec<Subtask>, String> {
     let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
@@ -616,7 +662,7 @@ pub fn get_subtasks(
 // Attachment commands
 #[tauri::command]
 pub fn get_attachments(
-    db: State<'_, Mutex<DbConnection>>,
+    db: State<'_, Arc<Mutex<DbConnection>>>,
     task_id: String,
 ) -> Result<Vec<Attachment>, String> {
     let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
@@ -643,7 +689,7 @@ pub fn get_attachments(
 
 #[tauri::command]
 pub fn add_attachment(
-    db: State<'_, Mutex<DbConnection>>,
+    db: State<'_, Arc<Mutex<DbConnection>>>,
     app_handle: tauri::AppHandle,
     task_id: String,
     file_path: String,
@@ -702,7 +748,7 @@ pub fn add_attachment(
 
 #[tauri::command]
 pub fn delete_attachment(
-    db: State<'_, Mutex<DbConnection>>,
+    db: State<'_, Arc<Mutex<DbConnection>>>,
     app_handle: tauri::AppHandle,
     id: String,
 ) -> Result<(), String> {
@@ -736,7 +782,7 @@ pub fn delete_attachment(
 
 // Settings commands
 #[tauri::command]
-pub fn get_settings(db: State<'_, Mutex<DbConnection>>) -> Result<HashMap<String, String>, String> {
+pub fn get_settings(db: State<'_, Arc<Mutex<DbConnection>>>) -> Result<HashMap<String, String>, String> {
     let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
     
     let mut stmt = db.conn.prepare("SELECT key, value FROM settings").map_err(|e| format!("Query error: {}", e))?;
@@ -755,7 +801,7 @@ pub fn get_settings(db: State<'_, Mutex<DbConnection>>) -> Result<HashMap<String
 
 #[tauri::command]
 pub fn update_settings(
-    db: State<'_, Mutex<DbConnection>>,
+    db: State<'_, Arc<Mutex<DbConnection>>>,
     key: String,
     value: String,
 ) -> Result<(), String> {
@@ -824,7 +870,7 @@ pub fn restore_backup(
 // Export and import commands
 #[tauri::command]
 pub fn export_data(
-    db: State<'_, Mutex<DbConnection>>,
+    db: State<'_, Arc<Mutex<DbConnection>>>,
     app_handle: tauri::AppHandle,
 ) -> Result<String, String> {
     use std::fs;
@@ -850,6 +896,8 @@ pub fn export_data(
             recurrence_type: row.get(11).unwrap_or_else(|_| "none".to_string()),
             recurrence_interval: row.get(12).unwrap_or(1),
             recurrence_parent_id: row.get(13).ok(),
+            reminder_minutes_before: None, // This query doesn't select these fields
+            notification_repeat: false,
         })
     }).map_err(|e| format!("Query execution error: {}", e))?;
     for row in rows {
@@ -946,7 +994,7 @@ pub fn export_data(
 
 #[tauri::command]
 pub fn import_data(
-    db: State<'_, Mutex<DbConnection>>,
+    db: State<'_, Arc<Mutex<DbConnection>>>,
     file_path: String,
 ) -> Result<ImportSummary, String> {
     use std::fs;
@@ -1086,36 +1134,364 @@ pub fn show_notification(title: String, body: String) -> Result<(), String> {
         .map_err(|e| format!("Failed to show notification: {}", e))
 }
 
-// Auto-start commands (basic implementation - stores setting, actual autostart would need OS-specific code)
+// Auto-start commands using Windows Registry (manual implementation for Tauri 1.8)
+#[cfg(target_os = "windows")]
 #[tauri::command]
-pub fn get_autostart_enabled(db: State<'_, Mutex<DbConnection>>) -> Result<bool, String> {
+pub fn get_autostart_enabled(app_handle: tauri::AppHandle) -> Result<bool, String> {
+    use winreg::enums::HKEY_CURRENT_USER;
+    use winreg::RegKey;
+    
+    let app_name = app_handle.package_info().name.clone();
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let run_key = hkcu.open_subkey("Software\\Microsoft\\Windows\\CurrentVersion\\Run")
+        .map_err(|e| format!("Failed to open registry key: {}", e))?;
+    
+    match run_key.get_value::<String, _>(&app_name) {
+        Ok(_) => Ok(true),
+        Err(_) => Ok(false),
+    }
+}
+
+#[cfg(target_os = "windows")]
+#[tauri::command]
+pub fn set_autostart_enabled(
+    app_handle: tauri::AppHandle,
+    enabled: bool,
+) -> Result<(), String> {
+    use winreg::enums::HKEY_CURRENT_USER;
+    use winreg::RegKey;
+    use std::env;
+    
+    let app_name = app_handle.package_info().name.clone();
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let (run_key, _) = hkcu.create_subkey("Software\\Microsoft\\Windows\\CurrentVersion\\Run")
+        .map_err(|e| format!("Failed to create/open registry key: {}", e))?;
+    
+    if enabled {
+        // Get the current executable path
+        let exe_path = env::current_exe()
+            .map_err(|e| format!("Failed to get executable path: {}", e))?;
+        let exe_path_str = exe_path.to_string_lossy().to_string();
+        
+        run_key.set_value(&app_name, &exe_path_str)
+            .map_err(|e| format!("Failed to set registry value: {}", e))?;
+    } else {
+        run_key.delete_value(&app_name)
+            .map_err(|e| format!("Failed to delete registry value: {}", e))?;
+    }
+    
+    Ok(())
+}
+
+// Fallback for non-Windows platforms
+#[cfg(not(target_os = "windows"))]
+#[tauri::command]
+pub fn get_autostart_enabled(_app_handle: tauri::AppHandle) -> Result<bool, String> {
+    Ok(false)
+}
+
+#[cfg(not(target_os = "windows"))]
+#[tauri::command]
+pub fn set_autostart_enabled(
+    _app_handle: tauri::AppHandle,
+    _enabled: bool,
+) -> Result<(), String> {
+    Err("Autostart is only supported on Windows in this version".to_string())
+}
+
+// Notification commands
+#[tauri::command]
+pub fn snooze_notification(
+    db: State<'_, Arc<Mutex<DbConnection>>>,
+    notification_id: String,
+    minutes: i32,
+) -> Result<(), String> {
     let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
-    
-    let enabled: Option<String> = db.conn.query_row(
-        "SELECT value FROM settings WHERE key = ?1",
-        params!["autostart_enabled"],
-        |row| row.get(0),
-    ).ok();
-    
-    Ok(enabled.as_deref() == Some("true"))
+    crate::notifications::snooze_notification(&db, &notification_id, minutes)
+        .map_err(|e| format!("Failed to snooze notification: {}", e))
+}
+
+// Statistics commands
+#[tauri::command]
+pub fn get_completion_stats(
+    db: State<'_, Arc<Mutex<DbConnection>>>,
+    days: i32,
+) -> Result<Vec<stats_service::CompletionStats>, String> {
+    let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+    stats_service::get_completion_stats(&db.conn, days)
 }
 
 #[tauri::command]
-pub fn set_autostart_enabled(
-    db: State<'_, Mutex<DbConnection>>,
-    enabled: bool,
-) -> Result<(), String> {
+pub fn get_priority_distribution(
+    db: State<'_, Arc<Mutex<DbConnection>>>,
+) -> Result<Vec<stats_service::PriorityDistribution>, String> {
+    let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+    stats_service::get_priority_distribution(&db.conn)
+}
+
+#[tauri::command]
+pub fn get_project_stats(
+    db: State<'_, Arc<Mutex<DbConnection>>>,
+) -> Result<Vec<stats_service::ProjectStats>, String> {
+    let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+    stats_service::get_project_stats(&db.conn)
+}
+
+#[tauri::command]
+pub fn get_productivity_trend(
+    db: State<'_, Arc<Mutex<DbConnection>>>,
+    start_date: i64,
+    end_date: i64,
+) -> Result<Vec<stats_service::ProductivityTrend>, String> {
+    let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+    stats_service::get_productivity_trend(&db.conn, start_date, end_date)
+}
+
+#[tauri::command]
+pub fn get_most_productive_day(
+    db: State<'_, Arc<Mutex<DbConnection>>>,
+) -> Result<Option<stats_service::MostProductiveDay>, String> {
+    let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+    stats_service::get_most_productive_day(&db.conn)
+}
+
+#[tauri::command]
+pub fn get_average_completion_time(
+    db: State<'_, Arc<Mutex<DbConnection>>>,
+) -> Result<f64, String> {
+    let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+    stats_service::get_average_completion_time(&db.conn)
+}
+
+// Template data structures
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Template {
+    pub id: String,
+    pub name: String,
+    pub title: String,
+    pub description: Option<String>,
+    pub priority: String,
+    pub project_id: Option<String>,
+    pub recurrence_type: Option<String>,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CreateTemplateInput {
+    pub name: String,
+    pub title: String,
+    pub description: Option<String>,
+    pub priority: String,
+    pub project_id: Option<String>,
+    pub recurrence_type: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct UpdateTemplateInput {
+    pub name: Option<String>,
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub priority: Option<String>,
+    pub project_id: Option<String>,
+    pub recurrence_type: Option<String>,
+}
+
+// Template commands
+#[tauri::command]
+pub fn create_template(
+    db: State<'_, Arc<Mutex<DbConnection>>>,
+    input: CreateTemplateInput,
+) -> Result<Template, String> {
     let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
     
-    db.conn.execute(
-        "INSERT OR REPLACE INTO settings (key, value) VALUES (?1, ?2)",
-        params!["autostart_enabled", enabled.to_string()],
-    ).map_err(|e| format!("Failed to update autostart setting: {}", e))?;
+    let id = uuid::Uuid::new_v4().to_string();
+    let now = now();
     
-    // Note: Actual OS-specific autostart implementation would go here
-    // For Windows: Modify registry or create shortcut in Startup folder
-    // For macOS: Use LaunchAgent
-    // For Linux: Use .desktop file in ~/.config/autostart/
+    db.conn.execute(
+        "INSERT INTO task_templates (id, name, title, description, priority, project_id, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        params![
+            id.clone(),
+            input.name,
+            input.title,
+            input.description,
+            input.priority,
+            input.project_id,
+            now,
+            now,
+        ],
+    ).map_err(|e| format!("Failed to create template: {}", e))?;
+    
+    db.conn.query_row(
+        "SELECT id, name, title, description, priority, project_id, created_at, updated_at FROM task_templates WHERE id = ?1",
+        params![id],
+        |row| {
+            Ok(Template {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                title: row.get(2)?,
+                description: row.get(3)?,
+                priority: row.get(4)?,
+                project_id: row.get(5)?,
+                recurrence_type: None,
+                created_at: row.get(6)?,
+                updated_at: row.get(7)?,
+            })
+        },
+    ).map_err(|e| format!("Failed to fetch created template: {}", e))
+}
+
+#[tauri::command]
+pub fn get_templates(db: State<'_, Arc<Mutex<DbConnection>>>) -> Result<Vec<Template>, String> {
+    let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+    
+    let mut stmt = db.conn.prepare("SELECT id, name, title, description, priority, project_id, created_at, updated_at FROM task_templates ORDER BY created_at DESC").map_err(|e| format!("Query error: {}", e))?;
+    let rows = stmt.query_map([], |row| {
+        Ok(Template {
+            id: row.get(0)?,
+            name: row.get(1)?,
+            title: row.get(2)?,
+            description: row.get(3)?,
+            priority: row.get(4)?,
+            project_id: row.get(5)?,
+            recurrence_type: None,
+            created_at: row.get(6)?,
+            updated_at: row.get(7)?,
+        })
+    }).map_err(|e| format!("Query execution error: {}", e))?;
+    
+    let mut templates = Vec::new();
+    for row in rows {
+        templates.push(row.map_err(|e| format!("Row parsing error: {}", e))?);
+    }
+    
+    Ok(templates)
+}
+
+#[tauri::command]
+pub fn get_template(db: State<'_, Arc<Mutex<DbConnection>>>, id: String) -> Result<Template, String> {
+    let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+    
+    db.conn.query_row(
+        "SELECT id, name, title, description, priority, project_id, created_at, updated_at FROM task_templates WHERE id = ?1",
+        params![id],
+        |row| {
+            Ok(Template {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                title: row.get(2)?,
+                description: row.get(3)?,
+                priority: row.get(4)?,
+                project_id: row.get(5)?,
+                recurrence_type: None,
+                created_at: row.get(6)?,
+                updated_at: row.get(7)?,
+            })
+        },
+    ).map_err(|e| format!("Template not found: {}", e))
+}
+
+#[tauri::command]
+pub fn update_template(
+    db: State<'_, Arc<Mutex<DbConnection>>>,
+    id: String,
+    input: UpdateTemplateInput,
+) -> Result<Template, String> {
+    let now = now();
+    let mut updates = Vec::new();
+    let mut query_params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+    
+    if let Some(name) = input.name {
+        updates.push("name = ?");
+        query_params.push(Box::new(name));
+    }
+    if let Some(title) = input.title {
+        updates.push("title = ?");
+        query_params.push(Box::new(title));
+    }
+    if let Some(description) = input.description {
+        updates.push("description = ?");
+        query_params.push(Box::new(description));
+    }
+    if let Some(priority) = input.priority {
+        updates.push("priority = ?");
+        query_params.push(Box::new(priority));
+    }
+    if let Some(project_id) = input.project_id {
+        updates.push("project_id = ?");
+        query_params.push(Box::new(project_id));
+    }
+    
+    if updates.is_empty() {
+        return get_template(db, id);
+    }
+    
+    {
+        let db_lock = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+        updates.push("updated_at = ?");
+        query_params.push(Box::new(now));
+        query_params.push(Box::new(id.clone()));
+        
+        let query = format!("UPDATE task_templates SET {} WHERE id = ?", updates.join(", "));
+        db_lock.conn.execute(&query, rusqlite::params_from_iter(query_params.iter()))
+            .map_err(|e| format!("Failed to update template: {}", e))?;
+    }
+    
+    get_template(db, id)
+}
+
+#[tauri::command]
+pub fn delete_template(db: State<'_, Arc<Mutex<DbConnection>>>, id: String) -> Result<(), String> {
+    let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+    
+    db.conn.execute("DELETE FROM task_templates WHERE id = ?1", params![id])
+        .map_err(|e| format!("Failed to delete template: {}", e))?;
     
     Ok(())
+}
+
+#[tauri::command]
+pub fn create_task_from_template(
+    db: State<'_, Arc<Mutex<DbConnection>>>,
+    template_id: String,
+    due_date: Option<i64>,
+) -> Result<Task, String> {
+    let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+    
+    // Get template
+    let template: (String, Option<String>, String, Option<String>) = db.conn.query_row(
+        "SELECT title, description, priority, project_id FROM task_templates WHERE id = ?1",
+        params![template_id],
+        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+    ).map_err(|e| format!("Template not found: {}", e))?;
+    
+    let (title, description, priority, project_id) = template;
+    
+    // Create task from template
+    let id = uuid::Uuid::new_v4().to_string();
+    let now = now();
+    
+    db.conn.execute(
+        "INSERT INTO tasks (id, title, description, due_at, created_at, updated_at, priority, completed_at, project_id, order_index, metadata, recurrence_type, recurrence_interval, recurrence_parent_id)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+        params![
+            id.clone(),
+            title,
+            description,
+            due_date,
+            now,
+            now,
+            priority,
+            None::<i64>,
+            project_id,
+            0,
+            None::<String>,
+            "none",
+            1,
+            None::<String>
+        ],
+    ).map_err(|e| format!("Failed to create task from template: {}", e))?;
+    
+    fetch_task(&db.conn, &id)
 }

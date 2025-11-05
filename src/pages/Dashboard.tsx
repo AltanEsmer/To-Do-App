@@ -6,6 +6,8 @@ import { AddTaskModal } from '../components/AddTaskModal'
 import { ProgressBar } from '../components/ProgressBar'
 import { EmptyState } from '../components/EmptyState'
 import { isDateToday } from '../utils/dateHelpers'
+import { useKeyboardShortcuts } from '../utils/useKeyboardShortcuts'
+import { KeyboardShortcutsModal } from '../components/KeyboardShortcutsModal'
 
 /**
  * Dashboard page showing today's tasks and progress overview
@@ -13,6 +15,12 @@ import { isDateToday } from '../utils/dateHelpers'
 export function Dashboard() {
   const { tasks } = useTasks()
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isShortcutsOpen, setIsShortcutsOpen] = useState(false)
+
+  useKeyboardShortcuts({
+    onQuickAdd: () => setIsModalOpen(true),
+    onShowShortcuts: () => setIsShortcutsOpen(true),
+  })
 
   const todayTasks = tasks.filter((task) => task.dueDate && isDateToday(task.dueDate))
   const incompleteTodayTasks = todayTasks.filter((task) => !task.completed)
@@ -73,6 +81,7 @@ export function Dashboard() {
       </div>
 
       <AddTaskModal open={isModalOpen} onOpenChange={setIsModalOpen} />
+      <KeyboardShortcutsModal open={isShortcutsOpen} onOpenChange={setIsShortcutsOpen} />
     </div>
   )
 }

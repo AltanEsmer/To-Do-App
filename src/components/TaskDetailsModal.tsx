@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Paperclip } from 'lucide-react'
+import { X, Bell } from 'lucide-react'
 import * as Dialog from '@radix-ui/react-dialog'
-import { Task } from '../store/useTasks'
+import { Task, useTasks } from '../store/useTasks'
 import * as tauriAdapter from '../api/tauriAdapter'
 import { isTauri } from '../utils/tauri'
 import clsx from 'clsx'
+import { useKeyboardShortcuts } from '../utils/useKeyboardShortcuts'
 
 interface TaskDetailsModalProps {
   task: Task | null
@@ -14,14 +15,28 @@ interface TaskDetailsModalProps {
 }
 
 export function TaskDetailsModal({ task, open, onOpenChange }: TaskDetailsModalProps) {
+  const { updateTask } = useTasks()
   const [attachments, setAttachments] = useState<tauriAdapter.Attachment[]>([])
   const [loading, setLoading] = useState(false)
+  const [reminderMinutesBefore, setReminderMinutesBefore] = useState<number | null>(null)
+  const [notificationRepeat, setNotificationRepeat] = useState(false)
 
   useEffect(() => {
     if (open && task) {
       loadAttachments()
+      setReminderMinutesBefore(task.reminderMinutesBefore || null)
+      setNotificationRepeat(task.notificationRepeat || false)
     }
   }, [open, task])
+
+  useKeyboardShortcuts({
+    onEscape: () => {
+      if (open) {
+        onOpenChange(false)
+      }
+    },
+    disabled: !open,
+  })
 
   const loadAttachments = async () => {
     if (!task) return
@@ -131,6 +146,65 @@ export function TaskDetailsModal({ task, open, onOpenChange }: TaskDetailsModalP
                         <div>
                           <h4 className="mb-2 text-sm font-medium text-foreground">Description</h4>
                           <p className="text-sm text-muted-foreground">{task.description}</p>
+                        </div>
+                      )}
+
+                      {task.dueDate && (
+                        <div>
+                          <div className="mb-2 flex items-center gap-2">
+                            <Bell className="h-4 w-4 text-muted-foreground" />
+                            <h4 className="text-sm font-medium text-foreground">Notification Reminder</h4>
+                          </div>
+                          <div className="space-y-3 rounded-lg border border-border bg-muted/30 p-4">
+                            <div>
+                              <label htmlFor="task-reminder-time" className="mb-1 block text-xs text-muted-foreground">
+                                Remind me
+                              </label>
+                              <select
+                                id="task-reminder-time"
+                                value={reminderMinutesBefore || ''}
+                                onChange={(e) => {
+                                  const value = e.target.value ? parseInt(e.target.value) : null
+                                  setReminderMinutesBefore(value)
+                                  if (task) {
+                                    updateTask(task.id, {
+                                      reminderMinutesBefore: value || undefined,
+                                      notificationRepeat: value ? notificationRepeat : false,
+                                    }).catch(console.error)
+                                  }
+                                }}
+                                className="focus-ring w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
+                              >
+                                <option value="">No reminder</option>
+                                <option value="15">15 minutes before</option>
+                                <option value="30">30 minutes before</option>
+                                <option value="60">1 hour before</option>
+                                <option value="120">2 hours before</option>
+                                <option value="1440">1 day before</option>
+                              </select>
+                            </div>
+                            {reminderMinutesBefore && (
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  id="task-notification-repeat"
+                                  checked={notificationRepeat}
+                                  onChange={(e) => {
+                                    setNotificationRepeat(e.target.checked)
+                                    if (task) {
+                                      updateTask(task.id, {
+                                        notificationRepeat: e.target.checked,
+                                      }).catch(console.error)
+                                    }
+                                  }}
+                                  className="h-4 w-4 rounded border-border text-primary-500 focus:ring-primary-500"
+                                />
+                                <label htmlFor="task-notification-repeat" className="text-xs text-muted-foreground">
+                                  Repeat reminder daily until completed
+                                </label>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       )}
 

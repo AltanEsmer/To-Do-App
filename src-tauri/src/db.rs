@@ -123,6 +123,37 @@ fn run_migrations(conn: &Connection, app_handle: &tauri::AppHandle) -> anyhow::R
                         if !has_recurrence_parent_id {
                             tx.execute("ALTER TABLE tasks ADD COLUMN recurrence_parent_id TEXT", [])?;
                         }
+                    } else if migration_file == "0006_add_notification_preferences.sql" {
+                        // Check if notification columns already exist
+                        let columns: Vec<String> = tx
+                            .prepare("SELECT name FROM pragma_table_info('tasks')")?
+                            .query_map([], |row| Ok(row.get::<_, String>(0)?))?
+                            .collect::<SqlResult<Vec<String>>>()?;
+                        
+                        let has_reminder_minutes_before = columns.contains(&"reminder_minutes_before".to_string());
+                        let has_notification_repeat = columns.contains(&"notification_repeat".to_string());
+                        
+                        // Only execute ALTER TABLE statements for missing columns
+                        if !has_reminder_minutes_before {
+                            tx.execute("ALTER TABLE tasks ADD COLUMN reminder_minutes_before INTEGER DEFAULT NULL", [])?;
+                        }
+                        if !has_notification_repeat {
+                            tx.execute("ALTER TABLE tasks ADD COLUMN notification_repeat INTEGER DEFAULT 0", [])?;
+                        }
+                        
+                        // Create notification_schedule table if it doesn't exist
+                        tx.execute_batch(
+                            "CREATE TABLE IF NOT EXISTS notification_schedule (
+                                id TEXT PRIMARY KEY NOT NULL,
+                                task_id TEXT NOT NULL,
+                                scheduled_at INTEGER NOT NULL,
+                                snooze_until INTEGER,
+                                created_at INTEGER NOT NULL,
+                                FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+                            );
+                            CREATE INDEX IF NOT EXISTS idx_notification_schedule_scheduled_at ON notification_schedule(scheduled_at);
+                            CREATE INDEX IF NOT EXISTS idx_notification_schedule_task_id ON notification_schedule(task_id);"
+                        )?;
                     } else {
                         // For other migrations, execute SQL as-is
                         tx.execute_batch(&sql)?;
@@ -176,6 +207,20 @@ fn run_migrations(conn: &Connection, app_handle: &tauri::AppHandle) -> anyhow::R
             conn.execute("ALTER TABLE tasks ADD COLUMN recurrence_parent_id TEXT", [])
                 .map_err(|e| anyhow::anyhow!("Failed to add recurrence_parent_id column: {}", e))?;
         }
+        
+        // Check if notification columns exist
+        let has_reminder_minutes_before = columns.contains(&"reminder_minutes_before".to_string());
+        let has_notification_repeat = columns.contains(&"notification_repeat".to_string());
+        
+        // Add missing notification columns
+        if !has_reminder_minutes_before {
+            conn.execute("ALTER TABLE tasks ADD COLUMN reminder_minutes_before INTEGER DEFAULT NULL", [])
+                .map_err(|e| anyhow::anyhow!("Failed to add reminder_minutes_before column: {}", e))?;
+        }
+        if !has_notification_repeat {
+            conn.execute("ALTER TABLE tasks ADD COLUMN notification_repeat INTEGER DEFAULT 0", [])
+                .map_err(|e| anyhow::anyhow!("Failed to add notification_repeat column: {}", e))?;
+        }
     }
     
     // Fallback: if no migrations were applied and tables don't exist, create them directly
@@ -204,6 +249,8 @@ fn run_migrations(conn: &Connection, app_handle: &tauri::AppHandle) -> anyhow::R
                 recurrence_type TEXT DEFAULT 'none',
                 recurrence_interval INTEGER DEFAULT 1,
                 recurrence_parent_id TEXT,
+                reminder_minutes_before INTEGER DEFAULT NULL,
+                notification_repeat INTEGER DEFAULT 0,
                 FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL
             );
             CREATE TABLE IF NOT EXISTS settings (

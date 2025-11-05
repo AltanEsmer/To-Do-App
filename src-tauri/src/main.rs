@@ -5,9 +5,10 @@ mod db;
 mod commands;
 mod attachments;
 mod notifications;
+mod services;
 
-use std::sync::Mutex;
-use tauri::{Manager, SystemTray, SystemTrayEvent, SystemTrayMenu, CustomMenuItem};
+use std::sync::{Arc, Mutex};
+use tauri::{Manager, SystemTray, SystemTrayEvent, SystemTrayMenu, CustomMenuItem, GlobalShortcutManager};
 
 fn main() {
     let quit = CustomMenuItem::new("quit".to_string(), "Quit");
@@ -67,7 +68,53 @@ fn main() {
             let _ = notifications::check_and_schedule_notifications(&app_handle, &db);
             
             // Store database connection in app state
-            app.manage(Mutex::new(db));
+            let db_for_app = Arc::new(Mutex::new(db));
+            let db_for_thread = db_for_app.clone();
+            app.manage(db_for_app);
+            
+            // Set up periodic notification checker (every minute)
+            std::thread::spawn(move || {
+                loop {
+                    std::thread::sleep(std::time::Duration::from_secs(60));
+                    if let Ok(db_lock) = db_for_thread.lock() {
+                        let _ = notifications::check_due_notifications(&db_lock);
+                    }
+                }
+            });
+            
+            // Register global shortcuts
+            let app_handle_shortcuts = app.handle().clone();
+            app.global_shortcut_manager().register("Ctrl+Shift+A", move || {
+                if let Some(window) = app_handle_shortcuts.get_window("main") {
+                    window.show().ok();
+                    window.set_focus().ok();
+                    window.emit("global-shortcut-add-task", ()).ok();
+                }
+            }).expect("Failed to register Ctrl+Shift+A");
+            
+            let app_handle_theme = app.handle().clone();
+            app.global_shortcut_manager().register("Ctrl+Shift+T", move || {
+                if let Some(window) = app_handle_theme.get_window("main") {
+                    window.emit("global-shortcut-toggle-theme", ()).ok();
+                }
+            }).expect("Failed to register Ctrl+Shift+T");
+            
+            let app_handle_open = app.handle().clone();
+            app.global_shortcut_manager().register("Ctrl+Shift+O", move || {
+                if let Some(window) = app_handle_open.get_window("main") {
+                    window.show().ok();
+                    window.set_focus().ok();
+                }
+            }).expect("Failed to register Ctrl+Shift+O");
+            
+            let app_handle_dashboard = app.handle().clone();
+            app.global_shortcut_manager().register("Ctrl+Shift+D", move || {
+                if let Some(window) = app_handle_dashboard.get_window("main") {
+                    window.show().ok();
+                    window.set_focus().ok();
+                    window.emit("global-shortcut-dashboard", ()).ok();
+                }
+            }).expect("Failed to register Ctrl+Shift+D");
             
             // Hide window on close if minimize to tray is enabled
             let app_handle_clone = app.handle().clone();
@@ -110,6 +157,19 @@ fn main() {
             commands::show_notification,
             commands::get_autostart_enabled,
             commands::set_autostart_enabled,
+            commands::get_completion_stats,
+            commands::get_priority_distribution,
+            commands::get_project_stats,
+            commands::get_productivity_trend,
+            commands::get_most_productive_day,
+            commands::get_average_completion_time,
+            commands::snooze_notification,
+            commands::create_template,
+            commands::get_templates,
+            commands::get_template,
+            commands::update_template,
+            commands::delete_template,
+            commands::create_task_from_template,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

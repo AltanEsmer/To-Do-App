@@ -1,16 +1,26 @@
 import { useState, useEffect } from 'react'
 import * as tauriAdapter from '../api/tauriAdapter'
 import { isTauri } from '../utils/tauri'
+import { TemplatesModal } from '../components/TemplatesModal'
 
 export function Settings() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(false)
   const [autostartEnabled, setAutostartEnabled] = useState(false)
   const [backupFrequency, setBackupFrequency] = useState('manual')
+  const [defaultReminderMinutes, setDefaultReminderMinutes] = useState<number | null>(null)
+  const [defaultNotificationRepeat, setDefaultNotificationRepeat] = useState(false)
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [isTemplatesOpen, setIsTemplatesOpen] = useState(false)
 
   useEffect(() => {
     loadSettings()
+  }, [])
+
+  useEffect(() => {
+    const handleOpenTemplates = () => setIsTemplatesOpen(true)
+    window.addEventListener('open-templates-modal', handleOpenTemplates)
+    return () => window.removeEventListener('open-templates-modal', handleOpenTemplates)
   }, [])
 
   const loadSettings = async () => {
@@ -19,6 +29,9 @@ export function Settings() {
       setNotificationsEnabled(settings.notifications_enabled === 'true')
       setAutostartEnabled(settings.autostart_enabled === 'true')
       setBackupFrequency(settings.backup_frequency || 'manual')
+      const defaultReminder = settings.default_reminder_minutes
+      setDefaultReminderMinutes(defaultReminder ? parseInt(defaultReminder) : null)
+      setDefaultNotificationRepeat(settings.default_notification_repeat === 'true')
     } catch (error) {
       console.error('Failed to load settings:', error)
     }
@@ -51,16 +64,24 @@ export function Settings() {
       setAutostartEnabled(enabled)
       showMessage('success', 'Auto-start setting saved')
     } catch (error) {
-      // Fallback to settings if command fails
-      try {
-        await tauriAdapter.updateSettings('autostart_enabled', enabled.toString())
-        setAutostartEnabled(enabled)
-        showMessage('success', 'Auto-start setting saved')
-      } catch (fallbackError) {
-        showMessage('error', 'Failed to save auto-start setting')
-      }
+      console.error('Failed to set autostart:', error)
+      showMessage('error', 'Failed to save auto-start setting')
     }
   }
+
+  useEffect(() => {
+    const loadAutostartStatus = async () => {
+      if (!isTauri()) return
+      try {
+        const { invoke } = await import('@tauri-apps/api/tauri')
+        const enabled = await invoke<boolean>('get_autostart_enabled')
+        setAutostartEnabled(enabled)
+      } catch (error) {
+        console.error('Failed to load autostart status:', error)
+      }
+    }
+    loadAutostartStatus()
+  }, [])
 
   const handleBackupFrequencyChange = async (frequency: string) => {
     try {
@@ -209,22 +230,82 @@ export function Settings() {
         {/* Notifications */}
         <div className="rounded-xl border border-border bg-card p-6">
           <h3 className="mb-4 text-lg font-semibold text-foreground">Notifications</h3>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-foreground">Enable notifications</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Receive notifications for due and overdue tasks
-              </p>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-foreground">Enable notifications</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Receive notifications for due and overdue tasks
+                </p>
+              </div>
+              <label className="relative inline-flex cursor-pointer items-center">
+                <input
+                  type="checkbox"
+                  checked={notificationsEnabled}
+                  onChange={(e) => handleNotificationsToggle(e.target.checked)}
+                  className="peer sr-only"
+                />
+                <div className="peer h-6 w-11 rounded-full bg-gray-200 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:bg-primary-500 peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 dark:bg-gray-700 dark:peer-focus:ring-primary-800"></div>
+              </label>
             </div>
-            <label className="relative inline-flex cursor-pointer items-center">
-              <input
-                type="checkbox"
-                checked={notificationsEnabled}
-                onChange={(e) => handleNotificationsToggle(e.target.checked)}
-                className="peer sr-only"
-              />
-              <div className="peer h-6 w-11 rounded-full bg-gray-200 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:bg-primary-500 peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 dark:bg-gray-700 dark:peer-focus:ring-primary-800"></div>
-            </label>
+
+            {notificationsEnabled && (
+              <div className="space-y-3 rounded-lg border border-border bg-muted/30 p-4">
+                <p className="text-sm font-medium text-foreground">Default Notification Preferences</p>
+                <p className="text-xs text-muted-foreground">
+                  These settings will be used as defaults when creating new tasks with due dates
+                </p>
+                <div>
+                  <label htmlFor="default-reminder-time" className="mb-1 block text-xs text-muted-foreground">
+                    Default reminder time
+                  </label>
+                  <select
+                    id="default-reminder-time"
+                    value={defaultReminderMinutes || ''}
+                    onChange={async (e) => {
+                      const value = e.target.value ? parseInt(e.target.value) : null
+                      setDefaultReminderMinutes(value)
+                      try {
+                        await tauriAdapter.updateSettings('default_reminder_minutes', value?.toString() || '')
+                        showMessage('success', 'Default reminder time saved')
+                      } catch (error) {
+                        showMessage('error', 'Failed to save default reminder time')
+                      }
+                    }}
+                    className="focus-ring w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
+                  >
+                    <option value="">No default reminder</option>
+                    <option value="15">15 minutes before</option>
+                    <option value="30">30 minutes before</option>
+                    <option value="60">1 hour before</option>
+                    <option value="120">2 hours before</option>
+                    <option value="1440">1 day before</option>
+                  </select>
+                </div>
+                {defaultReminderMinutes && (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="default-notification-repeat"
+                      checked={defaultNotificationRepeat}
+                      onChange={async (e) => {
+                        setDefaultNotificationRepeat(e.target.checked)
+                        try {
+                          await tauriAdapter.updateSettings('default_notification_repeat', e.target.checked.toString())
+                          showMessage('success', 'Default repeat setting saved')
+                        } catch (error) {
+                          showMessage('error', 'Failed to save default repeat setting')
+                        }
+                      }}
+                      className="h-4 w-4 rounded border-border text-primary-500 focus:ring-primary-500"
+                    />
+                    <label htmlFor="default-notification-repeat" className="text-xs text-muted-foreground">
+                      Default to repeat reminders daily until completed
+                    </label>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -317,6 +398,8 @@ export function Settings() {
           </div>
         </div>
       </div>
+
+      <TemplatesModal open={isTemplatesOpen} onOpenChange={setIsTemplatesOpen} />
     </div>
   )
 }

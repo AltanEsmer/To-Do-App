@@ -1,7 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import * as Dialog from '@radix-ui/react-dialog'
+import { FileText } from 'lucide-react'
 import { useTasks, TaskPriority, RecurrenceType } from '../store/useTasks'
+import { useKeyboardShortcuts } from '../utils/useKeyboardShortcuts'
+import { TemplatesModal } from './TemplatesModal'
+import * as tauriAdapter from '../api/tauriAdapter'
 
 interface AddTaskModalProps {
   open: boolean
@@ -20,6 +24,10 @@ export function AddTaskModal({ open, onOpenChange }: AddTaskModalProps) {
   const [priority, setPriority] = useState<TaskPriority>('medium')
   const [recurrenceType, setRecurrenceType] = useState<RecurrenceType>('none')
   const [recurrenceInterval, setRecurrenceInterval] = useState(1)
+  const [isTemplatesOpen, setIsTemplatesOpen] = useState(false)
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
+  const [reminderMinutesBefore, setReminderMinutesBefore] = useState<number | null>(null)
+  const [notificationRepeat, setNotificationRepeat] = useState(false)
   const titleInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -28,6 +36,20 @@ export function AddTaskModal({ open, onOpenChange }: AddTaskModalProps) {
       setTimeout(() => titleInputRef.current?.focus(), 100)
     }
   }, [open])
+
+  useKeyboardShortcuts({
+    onEnter: () => {
+      if (open && title.trim()) {
+        handleSubmit({ preventDefault: () => {} } as React.FormEvent)
+      }
+    },
+    onEscape: () => {
+      if (open) {
+        handleCancel()
+      }
+    },
+    disabled: !open,
+  })
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -42,6 +64,8 @@ export function AddTaskModal({ open, onOpenChange }: AddTaskModalProps) {
         completed: false,
         recurrenceType,
         recurrenceInterval,
+        reminderMinutesBefore: reminderMinutesBefore || undefined,
+        notificationRepeat,
       })
 
       // Reset form
@@ -51,6 +75,9 @@ export function AddTaskModal({ open, onOpenChange }: AddTaskModalProps) {
       setPriority('medium')
       setRecurrenceType('none')
       setRecurrenceInterval(1)
+      setSelectedTemplateId(null)
+      setReminderMinutesBefore(null)
+      setNotificationRepeat(false)
       onOpenChange(false)
     } catch (error) {
       console.error('Failed to add task:', error)
@@ -62,10 +89,26 @@ export function AddTaskModal({ open, onOpenChange }: AddTaskModalProps) {
     setTitle('')
     setDescription('')
     setDueDate('')
-    setPriority('medium')
-    setRecurrenceType('none')
-    setRecurrenceInterval(1)
-    onOpenChange(false)
+      setPriority('medium')
+      setRecurrenceType('none')
+      setRecurrenceInterval(1)
+      setSelectedTemplateId(null)
+      setReminderMinutesBefore(null)
+      setNotificationRepeat(false)
+      onOpenChange(false)
+  }
+
+  const handleLoadTemplate = async (templateId: string) => {
+    try {
+      const template = await tauriAdapter.getTemplate(templateId)
+      setTitle(template.title)
+      setDescription(template.description || '')
+      setPriority(template.priority as TaskPriority)
+      setSelectedTemplateId(templateId)
+      setIsTemplatesOpen(false)
+    } catch (error) {
+      console.error('Failed to load template:', error)
+    }
   }
 
   return (
@@ -98,9 +141,24 @@ export function AddTaskModal({ open, onOpenChange }: AddTaskModalProps) {
                   }}
                 >
                   <div className="p-6 flex-shrink-0">
-                    <Dialog.Title className="mb-4 text-lg font-semibold text-foreground">
-                      Add New Task
-                    </Dialog.Title>
+                    <div className="mb-4 flex items-center justify-between">
+                      <Dialog.Title className="text-lg font-semibold text-foreground">
+                        Add New Task
+                      </Dialog.Title>
+                      <button
+                        type="button"
+                        onClick={() => setIsTemplatesOpen(true)}
+                        className="focus-ring flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+                      >
+                        <FileText className="h-4 w-4" />
+                        Load from Template
+                      </button>
+                    </div>
+                    {selectedTemplateId && (
+                      <div className="mb-2 rounded-lg bg-primary-100 px-3 py-2 text-xs text-primary-700 dark:bg-primary-900/30 dark:text-primary-300">
+                        Template loaded
+                      </div>
+                    )}
                   </div>
                   <div className="px-6 pb-6 flex-1 overflow-y-auto">
                     <form onSubmit={handleSubmit}>
@@ -201,6 +259,56 @@ export function AddTaskModal({ open, onOpenChange }: AddTaskModalProps) {
                             </p>
                           )}
                         </div>
+
+                        {dueDate && (
+                          <div className="space-y-3 rounded-lg border border-border bg-muted/30 p-4">
+                            <div className="flex items-center justify-between">
+                              <label className="text-sm font-medium text-foreground">Notification Reminder</label>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setReminderMinutesBefore(null)
+                                  setNotificationRepeat(false)
+                                }}
+                                className="text-xs text-muted-foreground hover:text-foreground"
+                              >
+                                Clear
+                              </button>
+                            </div>
+                            <div>
+                              <label htmlFor="reminder-time" className="mb-1 block text-xs text-muted-foreground">
+                                Remind me
+                              </label>
+                              <select
+                                id="reminder-time"
+                                value={reminderMinutesBefore || ''}
+                                onChange={(e) => setReminderMinutesBefore(e.target.value ? parseInt(e.target.value) : null)}
+                                className="focus-ring w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
+                              >
+                                <option value="">No reminder</option>
+                                <option value="15">15 minutes before</option>
+                                <option value="30">30 minutes before</option>
+                                <option value="60">1 hour before</option>
+                                <option value="120">2 hours before</option>
+                                <option value="1440">1 day before</option>
+                              </select>
+                            </div>
+                            {reminderMinutesBefore && (
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  id="notification-repeat"
+                                  checked={notificationRepeat}
+                                  onChange={(e) => setNotificationRepeat(e.target.checked)}
+                                  className="h-4 w-4 rounded border-border text-primary-500 focus:ring-primary-500"
+                                />
+                                <label htmlFor="notification-repeat" className="text-xs text-muted-foreground">
+                                  Repeat reminder daily until completed
+                                </label>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
 
                       <div className="mt-6 flex justify-end gap-3">
@@ -226,6 +334,11 @@ export function AddTaskModal({ open, onOpenChange }: AddTaskModalProps) {
           )}
         </AnimatePresence>
       </Dialog.Portal>
+      <TemplatesModal
+        open={isTemplatesOpen}
+        onOpenChange={setIsTemplatesOpen}
+        onUseTemplate={handleLoadTemplate}
+      />
     </Dialog.Root>
   )
 }

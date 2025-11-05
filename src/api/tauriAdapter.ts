@@ -15,6 +15,8 @@ export interface Task {
   recurrence_type: string;
   recurrence_interval: number;
   recurrence_parent_id?: string;
+  reminder_minutes_before?: number;
+  notification_repeat?: boolean;
 }
 
 export interface Project {
@@ -57,6 +59,8 @@ export interface CreateTaskInput {
   project_id?: string;
   recurrence_type?: string;
   recurrence_interval?: number;
+  reminder_minutes_before?: number;
+  notification_repeat?: boolean;
 }
 
 export interface UpdateTaskInput {
@@ -68,6 +72,8 @@ export interface UpdateTaskInput {
   order_index?: number;
   recurrence_type?: string;
   recurrence_interval?: number;
+  reminder_minutes_before?: number;
+  notification_repeat?: boolean;
 }
 
 export interface CreateProjectInput {
@@ -260,3 +266,144 @@ export async function showNotification(title: string, body: string): Promise<voi
   });
 }
 
+// Statistics commands
+export interface CompletionStats {
+  date: string
+  count: number
+}
+
+export interface PriorityDistribution {
+  priority: string
+  count: number
+}
+
+export interface ProjectStats {
+  project_id: string | null
+  project_name: string | null
+  total_tasks: number
+  completed_tasks: number
+  completion_rate: number
+}
+
+export interface ProductivityTrend {
+  date: string
+  completion_rate: number
+}
+
+export interface MostProductiveDay {
+  day_of_week: string
+  count: number
+}
+
+export async function getCompletionStats(days: number): Promise<CompletionStats[]> {
+  return safeInvoke<CompletionStats[]>('get_completion_stats', { days }, () => Promise.resolve([]))
+}
+
+export async function getPriorityDistribution(): Promise<PriorityDistribution[]> {
+  return safeInvoke<PriorityDistribution[]>('get_priority_distribution', undefined, () =>
+    Promise.resolve([])
+  )
+}
+
+export async function getProjectStats(): Promise<ProjectStats[]> {
+  return safeInvoke<ProjectStats[]>('get_project_stats', undefined, () => Promise.resolve([]))
+}
+
+export async function getProductivityTrend(
+  startDate: number,
+  endDate: number
+): Promise<ProductivityTrend[]> {
+  return safeInvoke<ProductivityTrend[]>('get_productivity_trend', { startDate, endDate }, () =>
+    Promise.resolve([])
+  )
+}
+
+export async function getMostProductiveDay(): Promise<MostProductiveDay | null> {
+  return safeInvoke<MostProductiveDay | null>('get_most_productive_day', undefined, () =>
+    Promise.resolve(null)
+  )
+}
+
+export async function getAverageCompletionTime(): Promise<number> {
+  return safeInvoke<number>('get_average_completion_time', undefined, () => Promise.resolve(0))
+}
+
+// Autostart commands
+export async function isAutostartEnabled(): Promise<boolean> {
+  return safeInvoke<boolean>('get_autostart_enabled', undefined, () => Promise.resolve(false))
+}
+
+export async function setAutostartEnabled(enabled: boolean): Promise<void> {
+  return safeInvoke<void>('set_autostart_enabled', { enabled }, () => {
+    console.warn('Autostart not available in browser mode')
+    return Promise.resolve()
+  })
+}
+
+// Template commands
+export interface Template {
+  id: string
+  name: string
+  title: string
+  description?: string
+  priority: string
+  project_id?: string
+  recurrence_type?: string
+  created_at: number
+  updated_at: number
+}
+
+export interface CreateTemplateInput {
+  name: string
+  title: string
+  description?: string
+  priority: string
+  project_id?: string
+  recurrence_type?: string
+}
+
+export interface UpdateTemplateInput {
+  name?: string
+  title?: string
+  description?: string
+  priority?: string
+  project_id?: string
+  recurrence_type?: string
+}
+
+export async function getTemplates(): Promise<Template[]> {
+  return safeInvoke<Template[]>('get_templates', undefined, () => Promise.resolve([]))
+}
+
+export async function getTemplate(id: string): Promise<Template> {
+  return safeInvoke<Template>('get_template', { id }, () => {
+    throw new Error('Tauri not available - cannot get template in browser mode')
+  })
+}
+
+export async function createTemplate(input: CreateTemplateInput): Promise<Template> {
+  return safeInvoke<Template>('create_template', { input }, () => {
+    throw new Error('Tauri not available - cannot create template in browser mode')
+  })
+}
+
+export async function updateTemplate(id: string, input: UpdateTemplateInput): Promise<Template> {
+  return safeInvoke<Template>('update_template', { id, input }, () => {
+    throw new Error('Tauri not available - cannot update template in browser mode')
+  })
+}
+
+export async function deleteTemplate(id: string): Promise<void> {
+  return safeInvoke<void>('delete_template', { id }, () => {
+    throw new Error('Tauri not available - cannot delete template in browser mode')
+  })
+}
+
+export async function createTaskFromTemplate(
+  templateId: string,
+  dueDate?: number
+): Promise<Task> {
+  return safeInvoke<Task>('create_task_from_template', { templateId, dueDate }, () => {
+    throw new Error('Tauri not available - cannot create task from template in browser mode')
+  })
+}

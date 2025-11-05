@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom'
-import { Home, ClipboardList, CheckCircle2, Settings } from 'lucide-react'
+import { Home, ClipboardList, CheckCircle2, Settings, BarChart3 } from 'lucide-react'
 import clsx from 'clsx'
 
 interface NavItem {
@@ -23,6 +23,11 @@ const navItems: NavItem[] = [
     path: '/completed',
     label: 'Completed',
     icon: <CheckCircle2 className="h-5 w-5" />,
+  },
+  {
+    path: '/statistics',
+    label: 'Statistics',
+    icon: <BarChart3 className="h-5 w-5" />,
   },
   {
     path: '/settings',
