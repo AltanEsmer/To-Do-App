@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { Header } from './components/Header'
 import { Sidebar } from './components/Sidebar'
@@ -8,10 +8,27 @@ import { Completed } from './pages/Completed'
 import { Settings } from './pages/Settings'
 import { Statistics } from './pages/Statistics'
 import { useTasks } from './store/useTasks'
+import { useXp } from './store/useXp'
 import { isTauri } from './utils/tauri'
+import { Toaster } from './components/ui/toaster'
+import { LevelUpDialog } from './components/ui/LevelUpDialog'
 
 function App() {
   const { syncTasks } = useTasks()
+  const { hasLeveledUp, newLevel, resetLevelUp } = useXp()
+  const [levelUpDialogOpen, setLevelUpDialogOpen] = useState(false)
+
+  // Watch for level-ups
+  useEffect(() => {
+    if (hasLeveledUp && newLevel !== null) {
+      setLevelUpDialogOpen(true)
+    }
+  }, [hasLeveledUp, newLevel])
+
+  const handleLevelUpDialogClose = () => {
+    setLevelUpDialogOpen(false)
+    resetLevelUp()
+  }
 
   useEffect(() => {
     // Sync tasks on mount (only in Tauri)
@@ -58,6 +75,12 @@ function App() {
             </Routes>
           </main>
         </div>
+        <Toaster />
+        <LevelUpDialog
+          open={levelUpDialogOpen}
+          onOpenChange={handleLevelUpDialogClose}
+          newLevel={newLevel || 1}
+        />
       </div>
     </BrowserRouter>
   )

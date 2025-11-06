@@ -221,6 +221,31 @@ fn run_migrations(conn: &Connection, app_handle: &tauri::AppHandle) -> anyhow::R
             conn.execute("ALTER TABLE tasks ADD COLUMN notification_repeat INTEGER DEFAULT 0", [])
                 .map_err(|e| anyhow::anyhow!("Failed to add notification_repeat column: {}", e))?;
         }
+        
+        // Ensure task_templates table exists (fallback if migration 0005 wasn't applied)
+        let templates_table_exists: bool = conn.query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='task_templates'",
+            [],
+            |row| Ok(row.get::<_, i64>(0)? > 0),
+        )?;
+        
+        if !templates_table_exists {
+            conn.execute_batch(
+                "CREATE TABLE IF NOT EXISTS task_templates (
+                    id TEXT PRIMARY KEY NOT NULL,
+                    name TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    description TEXT,
+                    priority TEXT NOT NULL DEFAULT 'medium',
+                    project_id TEXT,
+                    created_at INTEGER NOT NULL,
+                    updated_at INTEGER NOT NULL,
+                    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_templates_name ON task_templates(name);
+                CREATE INDEX IF NOT EXISTS idx_templates_created ON task_templates(created_at);"
+            ).map_err(|e| anyhow::anyhow!("Failed to create task_templates table: {}", e))?;
+        }
     }
     
     // Fallback: if no migrations were applied and tables don't exist, create them directly
@@ -275,7 +300,20 @@ fn run_migrations(conn: &Connection, app_handle: &tauri::AppHandle) -> anyhow::R
             );
             CREATE INDEX IF NOT EXISTS idx_tasks_project_id ON tasks(project_id);
             CREATE INDEX IF NOT EXISTS idx_tasks_due_at ON tasks(due_at);
-            CREATE INDEX IF NOT EXISTS idx_tasks_completed_at ON tasks(completed_at);"
+            CREATE INDEX IF NOT EXISTS idx_tasks_completed_at ON tasks(completed_at);
+            CREATE TABLE IF NOT EXISTS task_templates (
+                id TEXT PRIMARY KEY NOT NULL,
+                name TEXT NOT NULL,
+                title TEXT NOT NULL,
+                description TEXT,
+                priority TEXT NOT NULL DEFAULT 'medium',
+                project_id TEXT,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL,
+                FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_templates_name ON task_templates(name);
+            CREATE INDEX IF NOT EXISTS idx_templates_created ON task_templates(created_at);"
         )?;
     }
     

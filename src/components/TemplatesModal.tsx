@@ -4,7 +4,6 @@ import * as Dialog from '@radix-ui/react-dialog'
 import { X, Plus, Edit2, Trash2, Check } from 'lucide-react'
 import { useTemplates } from '../store/useTemplates'
 import { useProjects } from '../store/useProjects'
-import { useTasks } from '../store/useTasks'
 import clsx from 'clsx'
 
 interface TemplatesModalProps {
@@ -17,7 +16,6 @@ export function TemplatesModal({ open, onOpenChange, onUseTemplate }: TemplatesM
   const { templates, loading, loadTemplates, createTemplate, updateTemplate, deleteTemplate } =
     useTemplates()
   const { projects } = useProjects()
-  const { syncTasks } = useTasks()
   const [isCreating, setIsCreating] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [formData, setFormData] = useState({
@@ -137,19 +135,29 @@ export function TemplatesModal({ open, onOpenChange, onUseTemplate }: TemplatesM
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />
             </Dialog.Overlay>
             <Dialog.Content
-              className="fixed left-1/2 top-1/2 z-50 w-full max-w-3xl -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-card p-6 shadow-xl focus:outline-none"
+              className="fixed z-50 w-full max-w-3xl rounded-xl border border-border bg-card p-6 shadow-xl focus:outline-none"
               asChild
             >
               <motion.div
-                initial={{ opacity: 0, scale: 0.95, y: -20 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: -20 }}
+                initial={{ opacity: 0, scale: 0.95, y: '-45%' }}
+                animate={{ opacity: 1, scale: 1, y: '-50%' }}
+                exit={{ opacity: 0, scale: 0.95, y: '-45%' }}
                 transition={{ duration: 0.2 }}
+                style={{
+                  left: '50%',
+                  top: '50%',
+                  x: '-50%',
+                }}
               >
                 <div className="mb-6 flex items-center justify-between">
-                  <Dialog.Title className="text-2xl font-bold text-foreground">
-                    Task Templates
-                  </Dialog.Title>
+                  <div>
+                    <Dialog.Title className="text-2xl font-bold text-foreground">
+                      Task Templates
+                    </Dialog.Title>
+                    <Dialog.Description className="mt-1 text-sm text-muted-foreground">
+                      Create and manage reusable task templates to quickly add common tasks.
+                    </Dialog.Description>
+                  </div>
                   <div className="flex gap-2">
                     {!isCreating && !editingId && (
                       <button

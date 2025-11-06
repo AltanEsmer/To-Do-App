@@ -61,6 +61,21 @@ A modern desktop todo application built with React + TypeScript frontend and Tau
 - **Export Data**: Export all data to JSON file
 - **Import Data**: Import data from JSON file
 
+### Gamification System
+- **XP System**: Experience points awarded for completing tasks
+  - Low priority tasks: 10 XP
+  - Medium priority tasks: 25 XP
+  - High priority tasks: 50 XP
+- **Level System**: Dynamic level calculation based on total XP
+  - Formula: `level = floor(sqrt(totalXp / 100)) + 1`
+  - XP required increases exponentially per level
+- **XP Bar**: Animated progress bar in header showing current level and XP progress
+- **XP Notifications**: Toast notifications when XP is granted
+- **Level-Up Dialog**: Celebratory modal when user levels up
+- **Progress Panel**: Optional component showing level, total XP, and streak stats
+- **UI Components**: Built with shadcn/ui (Progress, Toast, Dialog, Card, Badge)
+- **State Management**: Zustand store for XP data with localStorage persistence
+
 ---
 
 ## 🔧 Technical Implementation
@@ -70,10 +85,13 @@ A modern desktop todo application built with React + TypeScript frontend and Tau
 - **Vite** for build tooling
 - **Tailwind CSS** for styling
 - **Radix UI** for accessible components
+- **shadcn/ui** for composable UI components
 - **Zustand** for state management
 - **React Router** for navigation
 - **Framer Motion** for animations
 - **date-fns** for date handling
+- **class-variance-authority** for component variants
+- **tailwind-merge** for Tailwind class merging
 
 ### Backend Stack
 - **Tauri 1.8** for desktop framework
@@ -117,12 +135,24 @@ To-Do-App/
 │   ├── api/
 │   │   └── tauriAdapter.ts       # Tauri API adapter layer
 │   ├── components/
+│   │   ├── ui/                   # shadcn/ui components
+│   │   │   ├── progress.tsx      # Progress bar component
+│   │   │   ├── toast.tsx         # Toast component
+│   │   │   ├── dialog.tsx        # Dialog component
+│   │   │   ├── card.tsx          # Card component
+│   │   │   ├── badge.tsx          # Badge component
+│   │   │   ├── XPBar.tsx          # XP progress bar
+│   │   │   ├── XpToast.tsx        # XP toast hook
+│   │   │   ├── LevelUpDialog.tsx  # Level-up celebration dialog
+│   │   │   └── ProgressPanel.tsx # Progress stats panel
 │   │   ├── AddTaskModal.tsx      # Add task dialog
 │   │   ├── TaskDetailsModal.tsx  # Task details with attachments
 │   │   ├── TaskCard.tsx          # Task display component
-│   │   ├── Header.tsx            # App header
+│   │   ├── Header.tsx            # App header with XP bar
 │   │   ├── Sidebar.tsx           # Navigation sidebar
 │   │   └── ProgressBar.tsx       # Progress indicator
+│   ├── lib/
+│   │   └── utils.ts              # Utility functions (cn helper)
 │   ├── pages/
 │   │   ├── Dashboard.tsx         # Today's tasks overview
 │   │   ├── Completed.tsx        # Completed tasks view
@@ -130,7 +160,8 @@ To-Do-App/
 │   │   └── Settings.tsx         # Settings page
 │   ├── store/
 │   │   ├── useTasks.ts           # Tasks state management
-│   │   └── useProjects.ts        # Projects state management
+│   │   ├── useProjects.ts        # Projects state management
+│   │   └── useXp.ts              # XP and gamification state
 │   ├── utils/
 │   │   ├── tauri.ts              # Tauri detection & safe invoke
 │   │   ├── dateHelpers.ts        # Date utility functions
@@ -170,11 +201,16 @@ To-Do-App/
 - Theme switching
 - Modal dialogs (centered and properly sized)
 - Database persistence with migrations
+- **Gamification system**: XP, levels, progress tracking, level-up celebrations
+- **shadcn/ui components**: Progress, Toast, Dialog, Card, Badge components integrated
 
 ### ⚠️ Known Limitations
 - **Auto-start**: Setting is stored but OS-level implementation is pending
 - **Notifications**: Basic notification system in place; advanced scheduling may need enhancement
 - **Icons**: Placeholder icons; should be replaced with custom app icons
+- **Gamification Backend**: XP system is frontend-only; backend persistence and API integration pending
+- **Streaks**: Streak tracking is stored but not yet calculated/updated
+- **Badges**: Badge system schema exists but not yet implemented
 
 ### 🔄 Development Status
 - **Environment**: Fully functional in Tauri desktop mode
@@ -188,16 +224,20 @@ To-Do-App/
 ## 📝 Next Steps / Future Enhancements
 
 ### Potential Improvements
-1. **Custom App Icons**: Replace placeholder icons with branded app icons
-2. **Auto-start Implementation**: Complete OS-level auto-start functionality
-3. **Advanced Notifications**: More sophisticated scheduling and reminder system
-4. **Task Recurrence**: Recurring task support
-5. **Task Search & Filtering**: Enhanced search and filter capabilities
-6. **Task Sorting**: Multiple sort options (date, priority, project, etc.)
-7. **Keyboard Shortcuts**: Global keyboard shortcuts for common actions
-8. **Drag & Drop**: Reorder tasks via drag and drop
-9. **Task Templates**: Save and reuse task templates
-10. **Statistics Dashboard**: Task completion analytics and insights
+1. **Gamification Backend Integration**: Persist XP data to database, add Rust commands for XP operations
+2. **Streaks System**: Implement daily completion streak tracking and rewards
+3. **Badges System**: Create achievement badges for milestones (e.g., "First Task", "Week Warrior", "Month Master")
+4. **Gamification Statistics**: Analytics page showing XP history, level progression, completion trends
+5. **Custom App Icons**: Replace placeholder icons with branded app icons
+6. **Auto-start Implementation**: Complete OS-level auto-start functionality
+7. **Advanced Notifications**: More sophisticated scheduling and reminder system
+8. **Task Recurrence**: Recurring task support
+9. **Task Search & Filtering**: Enhanced search and filter capabilities
+10. **Task Sorting**: Multiple sort options (date, priority, project, etc.)
+11. **Keyboard Shortcuts**: Global keyboard shortcuts for common actions
+12. **Drag & Drop**: Reorder tasks via drag and drop
+13. **Task Templates**: Save and reuse task templates
+14. **Statistics Dashboard**: Task completion analytics and insights
 
 ---
 

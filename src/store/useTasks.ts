@@ -131,11 +131,55 @@ export const useTasks = create<TasksState>()(
 
   toggleComplete: async (id) => {
     try {
+      // Get task before toggle to check completion state
+      const currentTask = get().tasks.find((task) => task.id === id)
+      const wasCompleted = currentTask?.completed ?? false
+      const taskPriority = currentTask?.priority ?? 'medium'
+
       const rustTask = await tauriAdapter.toggleComplete(id)
       const updatedTask = convertTask(rustTask)
       set((state) => ({
         tasks: state.tasks.map((task) => (task.id === id ? updatedTask : task)),
       }))
+
+      // Handle XP gamification
+      const isNowCompleted = updatedTask.completed
+      if (wasCompleted !== isNowCompleted) {
+        // Import XP logic dynamically to avoid circular dependencies
+        const { useXp } = await import('./useXp')
+        const { toast } = await import('../components/ui/use-toast')
+        
+        // Get XP store state
+        const xpStore = useXp.getState()
+
+        // XP values based on task priority
+        const xpValues: Record<TaskPriority, number> = {
+          low: 10,
+          medium: 25,
+          high: 50,
+        }
+
+        const xpAmount = xpValues[taskPriority]
+        const xpToGrant = isNowCompleted ? xpAmount : -xpAmount
+
+        // Grant or revoke XP
+        xpStore.grantXp(xpToGrant, taskPriority)
+
+        if (isNowCompleted) {
+          // Show XP toast only when completing (not uncompleting)
+          const priorityLabels: Record<TaskPriority, string> = {
+            low: 'Low priority task done',
+            medium: 'Medium priority task done',
+            high: 'High priority task done',
+          }
+          toast({
+            title: `+${xpAmount} XP`,
+            description: priorityLabels[taskPriority],
+            variant: 'success',
+            duration: 3000,
+          })
+        }
+      }
     } catch (error) {
       set({
         error: error instanceof Error ? error.message : 'Failed to toggle task',

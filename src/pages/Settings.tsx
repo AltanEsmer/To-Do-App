@@ -240,7 +240,8 @@ export function Settings() {
         </div>
       )}
 
-      <div className="flex-1 space-y-6 overflow-y-auto">
+      <div className="flex flex-1 justify-center overflow-y-auto py-4">
+        <div className="w-full max-w-4xl space-y-6 mx-auto">
         {/* Notifications */}
         <div className="rounded-xl border border-border bg-card p-6">
           <h3 className="mb-4 text-lg font-semibold text-foreground">Notifications</h3>
@@ -432,6 +433,23 @@ export function Settings() {
               Export your tasks, projects, and settings to a JSON file. Import will merge or replace existing data.
             </p>
           </div>
+        </div>
+
+        {/* Templates */}
+        <div className="rounded-xl border border-border bg-card p-6">
+          <h3 className="mb-4 text-lg font-semibold text-foreground">Task Templates</h3>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Create and manage reusable task templates to quickly add common tasks.
+            </p>
+            <button
+              onClick={() => setIsTemplatesOpen(true)}
+              className="focus-ring w-full rounded-lg bg-primary-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-600"
+            >
+              Manage Templates
+            </button>
+          </div>
+        </div>
         </div>
       </div>
 
