@@ -1,6 +1,8 @@
+import { useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { Home, ClipboardList, CheckCircle2, Settings, BarChart3 } from 'lucide-react'
 import clsx from 'clsx'
+import * as tauriAdapter from '../api/tauriAdapter'
 
 interface NavItem {
   path: string
@@ -41,6 +43,39 @@ const navItems: NavItem[] = [
  */
 export function Sidebar() {
   const location = useLocation()
+  const [statisticsVisible, setStatisticsVisible] = useState(true)
+
+  useEffect(() => {
+    const loadStatisticsVisibility = async () => {
+      try {
+        const settings = await tauriAdapter.getSettings()
+        // Default to true if setting doesn't exist (backward compatibility)
+        setStatisticsVisible(settings.statistics_visible !== 'false')
+      } catch (error) {
+        console.error('Failed to load statistics visibility setting:', error)
+        // Default to true on error
+        setStatisticsVisible(true)
+      }
+    }
+    loadStatisticsVisibility()
+
+    // Listen for settings changes to update immediately
+    const handleSettingsChange = () => {
+      loadStatisticsVisibility()
+    }
+    window.addEventListener('settings-changed', handleSettingsChange)
+    return () => {
+      window.removeEventListener('settings-changed', handleSettingsChange)
+    }
+  }, [])
+
+  // Filter nav items based on statistics visibility setting
+  const visibleNavItems = navItems.filter((item) => {
+    if (item.path === '/statistics') {
+      return statisticsVisible
+    }
+    return true
+  })
 
   return (
     <aside
@@ -48,7 +83,7 @@ export function Sidebar() {
       aria-label="Main navigation"
     >
       <nav className="flex-1 space-y-1 px-4 py-6" aria-label="Sidebar navigation">
-        {navItems.map((item) => {
+        {visibleNavItems.map((item) => {
           const isActive = location.pathname === item.path
           return (
             <Link

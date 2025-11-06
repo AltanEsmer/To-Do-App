@@ -6,6 +6,7 @@ import { TemplatesModal } from '../components/TemplatesModal'
 export function Settings() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(false)
   const [autostartEnabled, setAutostartEnabled] = useState(false)
+  const [statisticsVisible, setStatisticsVisible] = useState(true)
   const [backupFrequency, setBackupFrequency] = useState('manual')
   const [defaultReminderMinutes, setDefaultReminderMinutes] = useState<number | null>(null)
   const [defaultNotificationRepeat, setDefaultNotificationRepeat] = useState(false)
@@ -28,6 +29,7 @@ export function Settings() {
       const settings = await tauriAdapter.getSettings()
       setNotificationsEnabled(settings.notifications_enabled === 'true')
       setAutostartEnabled(settings.autostart_enabled === 'true')
+      setStatisticsVisible(settings.statistics_visible !== 'false') // Default to true if not set
       setBackupFrequency(settings.backup_frequency || 'manual')
       const defaultReminder = settings.default_reminder_minutes
       setDefaultReminderMinutes(defaultReminder ? parseInt(defaultReminder) : null)
@@ -66,6 +68,18 @@ export function Settings() {
     } catch (error) {
       console.error('Failed to set autostart:', error)
       showMessage('error', 'Failed to save auto-start setting')
+    }
+  }
+
+  const handleStatisticsVisibilityToggle = async (enabled: boolean) => {
+    try {
+      await tauriAdapter.updateSettings('statistics_visible', enabled.toString())
+      setStatisticsVisible(enabled)
+      showMessage('success', 'Statistics visibility setting saved')
+      // Dispatch event to notify other components (e.g., Sidebar) of the change
+      window.dispatchEvent(new CustomEvent('settings-changed'))
+    } catch (error) {
+      showMessage('error', 'Failed to save statistics visibility setting')
     }
   }
 
@@ -324,6 +338,28 @@ export function Settings() {
                 type="checkbox"
                 checked={autostartEnabled}
                 onChange={(e) => handleAutostartToggle(e.target.checked)}
+                className="peer sr-only"
+              />
+              <div className="peer h-6 w-11 rounded-full bg-gray-200 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:bg-primary-500 peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 dark:bg-gray-700 dark:peer-focus:ring-primary-800"></div>
+            </label>
+          </div>
+        </div>
+
+        {/* Statistics Visibility */}
+        <div className="rounded-xl border border-border bg-card p-6">
+          <h3 className="mb-4 text-lg font-semibold text-foreground">Navigation</h3>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-foreground">Show Statistics page</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Show or hide the Statistics page in the sidebar navigation
+              </p>
+            </div>
+            <label className="relative inline-flex cursor-pointer items-center">
+              <input
+                type="checkbox"
+                checked={statisticsVisible}
+                onChange={(e) => handleStatisticsVisibilityToggle(e.target.checked)}
                 className="peer sr-only"
               />
               <div className="peer h-6 w-11 rounded-full bg-gray-200 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:bg-primary-500 peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 dark:bg-gray-700 dark:peer-focus:ring-primary-800"></div>
