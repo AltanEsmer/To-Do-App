@@ -407,3 +407,87 @@ export async function createTaskFromTemplate(
     throw new Error('Tauri not available - cannot create task from template in browser mode')
   })
 }
+
+// Gamification interfaces
+export interface UserProgress {
+  id: string
+  total_xp: number
+  current_level: number
+  current_streak: number
+  longest_streak: number
+  last_completion_date: number | null
+  created_at: number
+  updated_at: number
+}
+
+export interface Badge {
+  id: string
+  user_id: string
+  badge_type: string
+  earned_at: number
+  metadata: string | null
+}
+
+export interface XpHistoryEntry {
+  id: string
+  user_id: string
+  xp_amount: number
+  source: string
+  task_id: string | null
+  created_at: number
+}
+
+export interface GrantXpResult {
+  level_up: boolean
+  new_level: number
+  total_xp: number
+  current_xp: number
+  xp_to_next_level: number
+}
+
+// Gamification commands
+export async function getUserProgress(): Promise<UserProgress> {
+  return safeInvoke<UserProgress>('get_user_progress', undefined, () => {
+    // Return default progress in browser mode
+    return Promise.resolve({
+      id: 'default',
+      total_xp: 0,
+      current_level: 1,
+      current_streak: 0,
+      longest_streak: 0,
+      last_completion_date: null,
+      created_at: Date.now() / 1000,
+      updated_at: Date.now() / 1000,
+    })
+  })
+}
+
+export async function grantXp(
+  xp: number,
+  source: string,
+  taskId?: string
+): Promise<GrantXpResult> {
+  return safeInvoke<GrantXpResult>('grant_xp', { xp, source, taskId: taskId || null }, () => {
+    throw new Error('Tauri not available - cannot grant XP in browser mode')
+  })
+}
+
+export async function updateStreak(): Promise<UserProgress> {
+  return safeInvoke<UserProgress>('update_streak', undefined, () => {
+    throw new Error('Tauri not available - cannot update streak in browser mode')
+  })
+}
+
+export async function checkStreakOnStartup(): Promise<UserProgress> {
+  return safeInvoke<UserProgress>('check_streak_on_startup', undefined, () => {
+    throw new Error('Tauri not available - cannot check streak in browser mode')
+  })
+}
+
+export async function getBadges(): Promise<Badge[]> {
+  return safeInvoke<Badge[]>('get_badges', undefined, () => Promise.resolve([]))
+}
+
+export async function checkAndAwardBadges(): Promise<Badge[]> {
+  return safeInvoke<Badge[]>('check_and_award_badges', undefined, () => Promise.resolve([]))
+}

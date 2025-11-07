@@ -28,6 +28,8 @@ A modern desktop todo application built with React + TypeScript frontend and Tau
 - **All Tasks**: View and manage all tasks
 - **Completed**: View completed tasks
 - **Projects**: Project management page
+- **Statistics**: Comprehensive analytics dashboard with charts and insights
+- **Pomodoro**: Dedicated Pomodoro timer page with task integration
 - **Settings**: Comprehensive settings page
 
 ### Data Persistence
@@ -55,17 +57,25 @@ A modern desktop todo application built with React + TypeScript frontend and Tau
 ### Settings Features
 - **Notifications Toggle**: Enable/disable system notifications
 - **Auto-start Toggle**: Setting stored (OS-level implementation pending)
+- **Statistics Visibility**: Toggle visibility of statistics panel in sidebar
 - **Backup Frequency**: Configure automatic backup schedule
 - **Manual Backup**: Create backup on demand
 - **Restore Backup**: Restore from previous backup file
 - **Export Data**: Export all data to JSON file
 - **Import Data**: Import data from JSON file
+- **Pomodoro Timer Settings**: Customize timer durations
+  - Pomodoro duration (minutes)
+  - Short break duration (minutes)
+  - Long break duration (minutes)
+  - Long break interval (number of pomodoros)
+- **Task Templates Management**: Access to template creation and management interface
 
 ### Gamification System
 - **XP System**: Experience points awarded for completing tasks
   - Low priority tasks: 10 XP
   - Medium priority tasks: 25 XP
   - High priority tasks: 50 XP
+  - Pomodoro completion: 5 XP per session
 - **Level System**: Dynamic level calculation based on total XP
   - Formula: `level = floor(sqrt(totalXp / 100)) + 1`
   - XP required increases exponentially per level
@@ -75,6 +85,77 @@ A modern desktop todo application built with React + TypeScript frontend and Tau
 - **Progress Panel**: Optional component showing level, total XP, and streak stats
 - **UI Components**: Built with shadcn/ui (Progress, Toast, Dialog, Card, Badge)
 - **State Management**: Zustand store for XP data with localStorage persistence
+
+### Pomodoro Timer
+- **Timer Modes**: Three distinct modes for focused work sessions
+  - Pomodoro: Default 25 minutes for focused work
+  - Short Break: Default 5 minutes
+  - Long Break: Default 15 minutes (after every 4 pomodoros)
+- **Timer Controls**: Start, pause, and reset functionality
+- **Task Integration**: Select and associate tasks with timer sessions
+  - Task selection dropdown for choosing focus task
+  - Active task display during timer sessions
+  - Completion dialog after pomodoro finishes to mark task as done
+- **Automatic Cycling**: Smart transitions between work and break modes
+  - Automatically switches to break mode after pomodoro completion
+  - Automatically switches back to pomodoro after break completion
+  - Long break scheduling based on cycle count
+- **Notifications**: System and toast notifications for timer events
+  - "Pomodoro Complete!" notification when work session ends
+  - "Break's Over!" notification when break ends
+- **XP Integration**: Awards 5 XP for each completed pomodoro session
+- **Cycle Tracking**: Counts completed pomodoros in current session
+- **Customizable Settings**: Configurable timer durations in Settings page
+  - Pomodoro duration (default: 25 minutes)
+  - Short break duration (default: 5 minutes)
+  - Long break duration (default: 15 minutes)
+  - Long break interval (default: every 4 pomodoros)
+- **State Persistence**: Timer state saved to localStorage for session continuity
+- **UI Components**: Large, visible timer display with mode indicators and color coding
+
+### Statistics & Analytics
+- **Statistics Dashboard**: Comprehensive analytics page with multiple visualizations
+- **Summary Cards**: Quick overview metrics
+  - Total tasks count
+  - Completion rate percentage
+  - Tasks completed today, this week, this month
+  - Average tasks per day
+  - Most productive day of the week
+- **Charts & Visualizations**: Multiple chart types using Recharts
+  - **Line Chart**: Tasks completed over time (date range selectable)
+  - **Pie Chart**: Priority distribution across all tasks
+  - **Bar Chart**: Tasks by project (total vs completed)
+  - **Area Chart**: Productivity trend over time
+- **Date Range Selection**: Filter statistics by time period
+  - Last 7 days
+  - Last 30 days
+  - Last 90 days
+  - All time
+- **Additional Metrics**:
+  - Average completion time (days from creation to completion)
+  - Most productive day of the week
+  - Project-specific statistics with completion rates
+- **Export Functionality**: Export statistics data to JSON file
+- **Backend Integration**: All statistics calculated from database with optimized queries
+
+### Task Templates
+- **Template Management**: Create, edit, and delete reusable task templates
+- **Template Properties**: Templates include all task fields
+  - Template name (for identification)
+  - Task title
+  - Description
+  - Priority level
+  - Associated project
+- **Quick Task Creation**: Use templates to quickly create tasks with pre-filled data
+  - Templates accessible from Add Task Modal
+  - One-click task creation from template
+- **Database Persistence**: Templates stored in SQLite database with full CRUD support
+- **Template Modal**: Dedicated modal interface for managing templates
+  - Create new templates
+  - Edit existing templates
+  - Delete templates
+  - View all templates
+- **Integration**: Templates accessible from Settings page and Add Task Modal
 
 ---
 
@@ -90,6 +171,7 @@ A modern desktop todo application built with React + TypeScript frontend and Tau
 - **React Router** for navigation
 - **Framer Motion** for animations
 - **date-fns** for date handling
+- **Recharts** for data visualization (Statistics page)
 - **class-variance-authority** for component variants
 - **tailwind-merge** for Tailwind class merging
 
@@ -148,20 +230,27 @@ To-Do-App/
 │   │   ├── AddTaskModal.tsx      # Add task dialog
 │   │   ├── TaskDetailsModal.tsx  # Task details with attachments
 │   │   ├── TaskCard.tsx          # Task display component
+│   │   ├── TemplatesModal.tsx    # Task templates management
 │   │   ├── Header.tsx            # App header with XP bar
 │   │   ├── Sidebar.tsx           # Navigation sidebar
-│   │   └── ProgressBar.tsx       # Progress indicator
+│   │   ├── ProgressBar.tsx       # Progress indicator
+│   │   └── timer/
+│   │       └── Timer.tsx         # Pomodoro timer component
 │   ├── lib/
 │   │   └── utils.ts              # Utility functions (cn helper)
 │   ├── pages/
 │   │   ├── Dashboard.tsx         # Today's tasks overview
 │   │   ├── Completed.tsx        # Completed tasks view
 │   │   ├── Projects.tsx          # Projects management
+│   │   ├── Statistics.tsx       # Analytics and statistics dashboard
+│   │   ├── Pomodoro.tsx         # Pomodoro timer page
 │   │   └── Settings.tsx         # Settings page
 │   ├── store/
 │   │   ├── useTasks.ts           # Tasks state management
 │   │   ├── useProjects.ts        # Projects state management
-│   │   └── useXp.ts              # XP and gamification state
+│   │   ├── useXp.ts              # XP and gamification state
+│   │   ├── useTimer.ts           # Pomodoro timer state management
+│   │   └── useTemplates.ts       # Task templates state management
 │   ├── utils/
 │   │   ├── tauri.ts              # Tauri detection & safe invoke
 │   │   ├── dateHelpers.ts        # Date utility functions
@@ -202,7 +291,11 @@ To-Do-App/
 - Modal dialogs (centered and properly sized)
 - Database persistence with migrations
 - **Gamification system**: XP, levels, progress tracking, level-up celebrations
+- **Pomodoro Timer**: Full-featured timer with task integration, automatic cycling, and XP rewards
+- **Statistics Dashboard**: Comprehensive analytics with charts, trends, and productivity insights
+- **Task Templates**: Reusable task templates for quick task creation
 - **shadcn/ui components**: Progress, Toast, Dialog, Card, Badge components integrated
+- **Recharts integration**: Data visualization library for statistics charts
 
 ### ⚠️ Known Limitations
 - **Auto-start**: Setting is stored but OS-level implementation is pending
@@ -236,8 +329,10 @@ To-Do-App/
 10. **Task Sorting**: Multiple sort options (date, priority, project, etc.)
 11. **Keyboard Shortcuts**: Global keyboard shortcuts for common actions
 12. **Drag & Drop**: Reorder tasks via drag and drop
-13. **Task Templates**: Save and reuse task templates
-14. **Statistics Dashboard**: Task completion analytics and insights
+13. **Pomodoro History**: Track and display pomodoro session history and statistics
+14. **Pomodoro Sounds**: Audio notifications for timer start/end events
+15. **Statistics Enhancements**: More detailed analytics, custom date ranges, comparison views
+16. **Template Categories**: Organize templates into categories for better management
 
 ---
 

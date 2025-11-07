@@ -21,6 +21,8 @@ interface TimerState {
   cycles: number // count of completed pomodoros in current set
   settings: TimerSettings
   activeTaskId: string | null
+  startTime: number | null // timestamp in milliseconds when timer started
+  initialTimeLeft: number // time left in seconds when timer started
 
   // Actions
   startTimer: () => void
@@ -29,6 +31,7 @@ interface TimerState {
   setMode: (mode: TimerMode) => void
   setActiveTask: (taskId: string | null) => void
   _tick: () => void
+  syncTimer: () => Promise<void> // recalculate timeLeft based on elapsed time
   loadSettings: () => Promise<void>
   updateSettings: (newSettings: Partial<TimerSettings>) => Promise<void>
 }
@@ -49,9 +52,13 @@ export const useTimer = create<TimerState>()(
       cycles: 0,
       settings: defaultSettings,
       activeTaskId: null,
+      startTime: null,
+      initialTimeLeft: 25 * 60,
 
       startTimer: () => {
         const state = get()
+        const now = Date.now()
+        
         if (state.status === 'idle' && state.timeLeft === 0) {
           // Reset timer if it's at 0
           const mode = state.mode
@@ -60,14 +67,39 @@ export const useTimer = create<TimerState>()(
             : mode === 'shortBreak'
             ? state.settings.shortBreakTime
             : state.settings.longBreakTime
-          set({ timeLeft: duration * 60, status: 'running' })
+          const newTimeLeft = duration * 60
+          set({ 
+            timeLeft: newTimeLeft, 
+            status: 'running',
+            startTime: now,
+            initialTimeLeft: newTimeLeft
+          })
         } else {
-          set({ status: 'running' })
+          // Resume from current timeLeft
+          set({ 
+            status: 'running',
+            startTime: now,
+            initialTimeLeft: state.timeLeft
+          })
         }
       },
 
       pauseTimer: () => {
-        set({ status: 'paused' })
+        const state = get()
+        if (state.status === 'running' && state.startTime !== null) {
+          // Calculate elapsed time and update timeLeft
+          const now = Date.now()
+          const elapsedSeconds = Math.floor((now - state.startTime) / 1000)
+          const newTimeLeft = Math.max(0, state.initialTimeLeft - elapsedSeconds)
+          set({ 
+            status: 'paused',
+            timeLeft: newTimeLeft,
+            startTime: null,
+            initialTimeLeft: newTimeLeft
+          })
+        } else {
+          set({ status: 'paused' })
+        }
       },
 
       resetTimer: () => {
@@ -78,7 +110,13 @@ export const useTimer = create<TimerState>()(
             : state.mode === 'shortBreak'
             ? state.settings.shortBreakTime
             : state.settings.longBreakTime
-        set({ timeLeft: duration * 60, status: 'idle' })
+        const newTimeLeft = duration * 60
+        set({ 
+          timeLeft: newTimeLeft, 
+          status: 'idle',
+          startTime: null,
+          initialTimeLeft: newTimeLeft
+        })
       },
 
       setMode: (mode: TimerMode) => {
@@ -89,69 +127,96 @@ export const useTimer = create<TimerState>()(
             : mode === 'shortBreak'
             ? state.settings.shortBreakTime
             : state.settings.longBreakTime
-        set({ mode, timeLeft: duration * 60, status: 'idle' })
+        const newTimeLeft = duration * 60
+        set({ 
+          mode, 
+          timeLeft: newTimeLeft, 
+          status: 'idle',
+          startTime: null,
+          initialTimeLeft: newTimeLeft
+        })
       },
 
       setActiveTask: (taskId: string | null) => {
         set({ activeTaskId: taskId })
       },
 
+      syncTimer: async () => {
+        const state = get()
+        if (state.status === 'running' && state.startTime !== null) {
+          const now = Date.now()
+          const elapsedSeconds = Math.floor((now - state.startTime) / 1000)
+          const newTimeLeft = Math.max(0, state.initialTimeLeft - elapsedSeconds)
+          
+          if (newTimeLeft <= 0) {
+            // Timer finished
+            set({ 
+              status: 'idle',
+              timeLeft: 0,
+              startTime: null,
+              initialTimeLeft: 0
+            })
+
+            if (state.mode === 'pomodoro') {
+              // Pomodoro finished
+              const newCycles = state.cycles + 1
+              const shouldLongBreak = newCycles % state.settings.longBreakInterval === 0
+
+              // Award focus XP via backend
+              const xpStore = useXp.getState()
+              xpStore.grantXp(5, 'pomodoro').catch(console.error)
+
+              // Show notifications
+              tauriAdapter.showNotification('Pomodoro Complete!', 'Time for a break!').catch(console.error)
+              toast({
+                title: 'Pomodoro Complete!',
+                description: 'Time for a break!',
+                variant: 'success',
+                duration: 5000,
+              })
+
+              // Switch to break mode
+              const nextMode: TimerMode = shouldLongBreak ? 'longBreak' : 'shortBreak'
+              const breakDuration = shouldLongBreak
+                ? state.settings.longBreakTime
+                : state.settings.shortBreakTime
+
+              set({
+                mode: nextMode,
+                timeLeft: breakDuration * 60,
+                cycles: newCycles,
+                initialTimeLeft: breakDuration * 60,
+              })
+            } else {
+              // Break finished
+              tauriAdapter.showNotification('Break Over!', "Break's over! Time to focus.").catch(console.error)
+              toast({
+                title: "Break's Over!",
+                description: 'Time to focus.',
+                variant: 'default',
+                duration: 5000,
+              })
+
+              // Switch back to pomodoro mode
+              const pomodoroDuration = state.settings.pomodoroTime * 60
+              set({
+                mode: 'pomodoro',
+                timeLeft: pomodoroDuration,
+                initialTimeLeft: pomodoroDuration,
+              })
+            }
+          } else {
+            set({ timeLeft: newTimeLeft })
+          }
+        }
+      },
+
       _tick: () => {
         const state = get()
         if (state.status !== 'running') return
 
-        if (state.timeLeft > 0) {
-          set({ timeLeft: state.timeLeft - 1 })
-        } else {
-          // Timer finished
-          set({ status: 'idle' })
-
-          if (state.mode === 'pomodoro') {
-            // Pomodoro finished
-            const newCycles = state.cycles + 1
-            const shouldLongBreak = newCycles % state.settings.longBreakInterval === 0
-
-            // Award focus XP
-            const xpStore = useXp.getState()
-            xpStore.grantXp(5)
-
-            // Show notifications
-            tauriAdapter.showNotification('Pomodoro Complete!', 'Time for a break!').catch(console.error)
-            toast({
-              title: 'Pomodoro Complete!',
-              description: 'Time for a break!',
-              variant: 'success',
-              duration: 5000,
-            })
-
-            // Switch to break mode
-            const nextMode: TimerMode = shouldLongBreak ? 'longBreak' : 'shortBreak'
-            const breakDuration = shouldLongBreak
-              ? state.settings.longBreakTime
-              : state.settings.shortBreakTime
-
-            set({
-              mode: nextMode,
-              timeLeft: breakDuration * 60,
-              cycles: newCycles,
-            })
-          } else {
-            // Break finished
-            tauriAdapter.showNotification('Break Over!', "Break's over! Time to focus.").catch(console.error)
-            toast({
-              title: "Break's Over!",
-              description: 'Time to focus.',
-              variant: 'default',
-              duration: 5000,
-            })
-
-            // Switch back to pomodoro mode
-            set({
-              mode: 'pomodoro',
-              timeLeft: state.settings.pomodoroTime * 60,
-            })
-          }
-        }
+        // Use syncTimer to calculate based on elapsed time
+        get().syncTimer()
       },
 
       loadSettings: async () => {
@@ -248,6 +313,8 @@ export const useTimer = create<TimerState>()(
         cycles: state.cycles,
         activeTaskId: state.activeTaskId,
         settings: state.settings,
+        startTime: state.startTime,
+        initialTimeLeft: state.initialTimeLeft,
       }),
     }
   )

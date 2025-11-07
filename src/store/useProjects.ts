@@ -15,7 +15,7 @@ interface ProjectsState {
   loading: boolean
   error: string | null
   syncProjects: () => Promise<void>
-  addProject: (project: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>
+  addProject: (project: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>) => Promise<Project>
   updateProject: (id: string, updates: Partial<Omit<Project, 'id' | 'createdAt' | 'updatedAt'>>) => Promise<void>
   deleteProject: (id: string) => Promise<void>
   getProjectById: (id: string) => Project | undefined
@@ -63,6 +63,7 @@ export const useProjects = create<ProjectsState>()(
       set((state) => ({
         projects: [...state.projects, newProject],
       }))
+      return newProject
     } catch (error) {
       set({
         error: error instanceof Error ? error.message : 'Failed to create project',

@@ -16,7 +16,7 @@ import { LevelUpDialog } from './components/ui/LevelUpDialog'
 
 function App() {
   const { syncTasks } = useTasks()
-  const { hasLeveledUp, newLevel, resetLevelUp } = useXp()
+  const { hasLeveledUp, newLevel, resetLevelUp, syncFromBackend, loadBadges, checkBadges } = useXp()
   const [levelUpDialogOpen, setLevelUpDialogOpen] = useState(false)
 
   // Watch for level-ups
@@ -30,6 +30,27 @@ function App() {
     setLevelUpDialogOpen(false)
     resetLevelUp()
   }
+
+  // Initialize gamification on mount
+  useEffect(() => {
+    const initializeGamification = async () => {
+      try {
+        // Always sync XP (has fallback for browser mode)
+        await syncFromBackend()
+        // Load badges
+        await loadBadges()
+        // Check for badges only in Tauri mode
+        if (isTauri()) {
+          await checkBadges()
+        }
+      } catch (error) {
+        console.error('Failed to initialize gamification:', error)
+      }
+    }
+    
+    initializeGamification()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // Only run once on mount
 
   useEffect(() => {
     // Sync tasks on mount (only in Tauri)

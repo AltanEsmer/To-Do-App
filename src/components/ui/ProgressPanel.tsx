@@ -1,16 +1,25 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './card'
 import { Badge } from './badge'
 import { useXp } from '@/store/useXp'
+import { Trophy } from 'lucide-react'
 
 interface ProgressPanelProps {
   className?: string
+}
+
+const badgeNames: Record<string, string> = {
+  first_task: 'First Task',
+  task_master_100: 'Task Master',
+  week_warrior: 'Week Warrior',
+  level_10: 'Level 10',
 }
 
 /**
  * ProgressPanel component displaying user progress stats
  */
 export function ProgressPanel({ className }: ProgressPanelProps) {
-  const { level, totalXp, streak } = useXp()
+  const { level, totalXp, streak, badges } = useXp()
+  const recentBadges = badges.slice(0, 5) // Show last 5 badges
 
   return (
     <Card className={className}>
@@ -32,10 +41,30 @@ export function ProgressPanel({ className }: ProgressPanelProps) {
           <span className="text-sm font-medium">{streak} days</span>
         </div>
         <div className="pt-2 border-t border-border">
-          <span className="text-xs text-muted-foreground">Badges</span>
-          <div className="mt-2 text-xs text-muted-foreground italic">
-            Coming soon...
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs text-muted-foreground">Badges</span>
+            <span className="text-xs text-muted-foreground">{badges.length} earned</span>
           </div>
+          {recentBadges.length > 0 ? (
+            <div className="mt-2 space-y-1">
+              {recentBadges.map((badge) => (
+                <div
+                  key={badge.id}
+                  className="flex items-center gap-2 text-xs"
+                  title={badge.badge_type}
+                >
+                  <Trophy className="h-3 w-3 text-yellow-500" />
+                  <span className="text-foreground">
+                    {badgeNames[badge.badge_type] || badge.badge_type}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-2 text-xs text-muted-foreground italic">
+              No badges yet. Complete tasks to earn badges!
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>

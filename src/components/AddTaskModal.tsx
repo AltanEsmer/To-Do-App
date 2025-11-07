@@ -54,6 +54,10 @@ export function AddTaskModal({ open, onOpenChange }: AddTaskModalProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!title.trim()) return
+    if (!dueDate) {
+      // Show error or prevent submission
+      return
+    }
 
     try {
       await addTask({
@@ -197,7 +201,7 @@ export function AddTaskModal({ open, onOpenChange }: AddTaskModalProps) {
                         <div className="grid grid-cols-2 gap-4">
                           <div>
                             <label htmlFor="task-due-date" className="mb-1 block text-sm font-medium text-foreground">
-                              Due Date
+                              Due Date <span className="text-red-500">*</span>
                             </label>
                             <input
                               id="task-due-date"
@@ -205,6 +209,8 @@ export function AddTaskModal({ open, onOpenChange }: AddTaskModalProps) {
                               value={dueDate}
                               onChange={(e) => setDueDate(e.target.value)}
                               className="focus-ring w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
+                              required
+                              aria-required="true"
                             />
                           </div>
 

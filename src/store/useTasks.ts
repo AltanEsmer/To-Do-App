@@ -142,43 +142,37 @@ export const useTasks = create<TasksState>()(
         tasks: state.tasks.map((task) => (task.id === id ? updatedTask : task)),
       }))
 
-      // Handle XP gamification
+      // Handle XP gamification - backend handles XP granting, just sync state
       const isNowCompleted = updatedTask.completed
-      if (wasCompleted !== isNowCompleted) {
-        // Import XP logic dynamically to avoid circular dependencies
+      if (wasCompleted !== isNowCompleted && isNowCompleted) {
+        // Sync XP from backend after task completion
         const { useXp } = await import('./useXp')
         const { toast } = await import('../components/ui/use-toast')
         
-        // Get XP store state
-        const xpStore = useXp.getState()
-
-        // XP values based on task priority
+        // Sync XP state from backend
+        await useXp.getState().syncFromBackend()
+        
+        // Check for badges
+        await useXp.getState().checkBadges()
+        
+        // Show XP toast
         const xpValues: Record<TaskPriority, number> = {
           low: 10,
           medium: 25,
           high: 50,
         }
-
         const xpAmount = xpValues[taskPriority]
-        const xpToGrant = isNowCompleted ? xpAmount : -xpAmount
-
-        // Grant or revoke XP
-        xpStore.grantXp(xpToGrant, taskPriority)
-
-        if (isNowCompleted) {
-          // Show XP toast only when completing (not uncompleting)
-          const priorityLabels: Record<TaskPriority, string> = {
-            low: 'Low priority task done',
-            medium: 'Medium priority task done',
-            high: 'High priority task done',
-          }
-          toast({
-            title: `+${xpAmount} XP`,
-            description: priorityLabels[taskPriority],
-            variant: 'success',
-            duration: 3000,
-          })
+        const priorityLabels: Record<TaskPriority, string> = {
+          low: 'Low priority task done',
+          medium: 'Medium priority task done',
+          high: 'High priority task done',
         }
+        toast({
+          title: `+${xpAmount} XP`,
+          description: priorityLabels[taskPriority],
+          variant: 'success',
+          duration: 3000,
+        })
       }
     } catch (error) {
       set({

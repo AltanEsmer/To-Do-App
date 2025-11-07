@@ -6,7 +6,7 @@ import { Play, Pause, RotateCcw } from 'lucide-react'
  * Timer component that displays the countdown and controls
  */
 export function Timer() {
-  const { mode, status, timeLeft, startTimer, pauseTimer, resetTimer, _tick } = useTimer()
+  const { mode, status, timeLeft, startTimer, pauseTimer, resetTimer, _tick, syncTimer } = useTimer()
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
 
   // Format time as MM:SS
@@ -16,9 +16,17 @@ export function Timer() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
   }
 
+  // Sync timer when component mounts (handles page navigation)
+  useEffect(() => {
+    syncTimer()
+  }, [syncTimer])
+
   // Manage the timer interval
   useEffect(() => {
     if (status === 'running') {
+      // Sync immediately when status changes to running
+      syncTimer()
+      
       intervalRef.current = setInterval(() => {
         _tick()
       }, 1000)
@@ -34,7 +42,7 @@ export function Timer() {
         clearInterval(intervalRef.current)
       }
     }
-  }, [status, _tick])
+  }, [status, _tick, syncTimer])
 
   const modeLabels = {
     pomodoro: 'Pomodoro',

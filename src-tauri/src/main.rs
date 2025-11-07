@@ -70,6 +70,15 @@ fn main() {
             // Store database connection in app state
             let db_for_app = Arc::new(Mutex::new(db));
             let db_for_thread = db_for_app.clone();
+            
+            // Check streak on startup (before app state is managed, use direct connection)
+            // We can't use State in setup, so we'll call the internal function directly
+            {
+                if let Ok(db_lock) = db_for_app.lock() {
+                    let _ = commands::update_streak_internal(&db_lock.conn);
+                }
+            }
+            
             app.manage(db_for_app);
             
             // Set up periodic notification checker (every minute)
@@ -170,6 +179,12 @@ fn main() {
             commands::update_template,
             commands::delete_template,
             commands::create_task_from_template,
+            commands::get_user_progress,
+            commands::grant_xp,
+            commands::update_streak,
+            commands::check_streak_on_startup,
+            commands::get_badges,
+            commands::check_and_award_badges,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

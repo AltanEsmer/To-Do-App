@@ -15,11 +15,25 @@ export function Settings() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [isTemplatesOpen, setIsTemplatesOpen] = useState(false)
   const { settings: timerSettings, updateSettings: updateTimerSettings, loadSettings: loadTimerSettings } = useTimer()
+  
+  // Local state for pomodoro inputs to allow empty values
+  const [pomodoroTimeInput, setPomodoroTimeInput] = useState<string>('')
+  const [shortBreakTimeInput, setShortBreakTimeInput] = useState<string>('')
+  const [longBreakTimeInput, setLongBreakTimeInput] = useState<string>('')
+  const [longBreakIntervalInput, setLongBreakIntervalInput] = useState<string>('')
 
   useEffect(() => {
     loadSettings()
     loadTimerSettings()
   }, [loadTimerSettings])
+
+  // Sync local input state with timer settings
+  useEffect(() => {
+    setPomodoroTimeInput(timerSettings.pomodoroTime.toString())
+    setShortBreakTimeInput(timerSettings.shortBreakTime.toString())
+    setLongBreakTimeInput(timerSettings.longBreakTime.toString())
+    setLongBreakIntervalInput(timerSettings.longBreakInterval.toString())
+  }, [timerSettings])
 
   useEffect(() => {
     const handleOpenTemplates = () => setIsTemplatesOpen(true)
@@ -384,14 +398,18 @@ export function Settings() {
                 type="number"
                 min="1"
                 max="60"
-                value={timerSettings.pomodoroTime}
-                onChange={async (e) => {
-                  const value = parseInt(e.target.value) || 25
-                  try {
-                    await updateTimerSettings({ pomodoroTime: value })
-                    showMessage('success', 'Pomodoro duration saved')
-                  } catch (error) {
-                    showMessage('error', 'Failed to save Pomodoro duration')
+                value={pomodoroTimeInput}
+                onChange={(e) => setPomodoroTimeInput(e.target.value)}
+                onBlur={async () => {
+                  const value = parseInt(pomodoroTimeInput) || 1
+                  if (value !== timerSettings.pomodoroTime) {
+                    try {
+                      await updateTimerSettings({ pomodoroTime: value })
+                      showMessage('success', 'Pomodoro duration saved')
+                    } catch (error) {
+                      showMessage('error', 'Failed to save Pomodoro duration')
+                      setPomodoroTimeInput(timerSettings.pomodoroTime.toString())
+                    }
                   }
                 }}
                 className="focus-ring w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
@@ -410,14 +428,18 @@ export function Settings() {
                 type="number"
                 min="1"
                 max="30"
-                value={timerSettings.shortBreakTime}
-                onChange={async (e) => {
-                  const value = parseInt(e.target.value) || 5
-                  try {
-                    await updateTimerSettings({ shortBreakTime: value })
-                    showMessage('success', 'Short break duration saved')
-                  } catch (error) {
-                    showMessage('error', 'Failed to save short break duration')
+                value={shortBreakTimeInput}
+                onChange={(e) => setShortBreakTimeInput(e.target.value)}
+                onBlur={async () => {
+                  const value = parseInt(shortBreakTimeInput) || 1
+                  if (value !== timerSettings.shortBreakTime) {
+                    try {
+                      await updateTimerSettings({ shortBreakTime: value })
+                      showMessage('success', 'Short break duration saved')
+                    } catch (error) {
+                      showMessage('error', 'Failed to save short break duration')
+                      setShortBreakTimeInput(timerSettings.shortBreakTime.toString())
+                    }
                   }
                 }}
                 className="focus-ring w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
@@ -436,14 +458,18 @@ export function Settings() {
                 type="number"
                 min="1"
                 max="60"
-                value={timerSettings.longBreakTime}
-                onChange={async (e) => {
-                  const value = parseInt(e.target.value) || 15
-                  try {
-                    await updateTimerSettings({ longBreakTime: value })
-                    showMessage('success', 'Long break duration saved')
-                  } catch (error) {
-                    showMessage('error', 'Failed to save long break duration')
+                value={longBreakTimeInput}
+                onChange={(e) => setLongBreakTimeInput(e.target.value)}
+                onBlur={async () => {
+                  const value = parseInt(longBreakTimeInput) || 1
+                  if (value !== timerSettings.longBreakTime) {
+                    try {
+                      await updateTimerSettings({ longBreakTime: value })
+                      showMessage('success', 'Long break duration saved')
+                    } catch (error) {
+                      showMessage('error', 'Failed to save long break duration')
+                      setLongBreakTimeInput(timerSettings.longBreakTime.toString())
+                    }
                   }
                 }}
                 className="focus-ring w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
@@ -462,14 +488,18 @@ export function Settings() {
                 type="number"
                 min="2"
                 max="10"
-                value={timerSettings.longBreakInterval}
-                onChange={async (e) => {
-                  const value = parseInt(e.target.value) || 4
-                  try {
-                    await updateTimerSettings({ longBreakInterval: value })
-                    showMessage('success', 'Long break interval saved')
-                  } catch (error) {
-                    showMessage('error', 'Failed to save long break interval')
+                value={longBreakIntervalInput}
+                onChange={(e) => setLongBreakIntervalInput(e.target.value)}
+                onBlur={async () => {
+                  const value = parseInt(longBreakIntervalInput) || 2
+                  if (value !== timerSettings.longBreakInterval) {
+                    try {
+                      await updateTimerSettings({ longBreakInterval: value })
+                      showMessage('success', 'Long break interval saved')
+                    } catch (error) {
+                      showMessage('error', 'Failed to save long break interval')
+                      setLongBreakIntervalInput(timerSettings.longBreakInterval.toString())
+                    }
                   }
                 }}
                 className="focus-ring w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"

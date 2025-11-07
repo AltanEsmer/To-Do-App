@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import * as Dialog from '@radix-ui/react-dialog'
+import { Plus } from 'lucide-react'
 import { useTasks, Task, TaskPriority, RecurrenceType } from '../store/useTasks'
 import { useProjects } from '../store/useProjects'
 import { useKeyboardShortcuts } from '../utils/useKeyboardShortcuts'
@@ -17,7 +18,7 @@ interface EditTaskModalProps {
  */
 export function EditTaskModal({ task, open, onOpenChange }: EditTaskModalProps) {
   const { updateTask } = useTasks()
-  const { projects } = useProjects()
+  const { projects, addProject, syncProjects } = useProjects()
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [dueDate, setDueDate] = useState('')
@@ -27,7 +28,17 @@ export function EditTaskModal({ task, open, onOpenChange }: EditTaskModalProps) 
   const [recurrenceInterval, setRecurrenceInterval] = useState(1)
   const [reminderMinutesBefore, setReminderMinutesBefore] = useState<number | null>(null)
   const [notificationRepeat, setNotificationRepeat] = useState(false)
+  const [isCreateProjectOpen, setIsCreateProjectOpen] = useState(false)
+  const [newProjectName, setNewProjectName] = useState('')
   const titleInputRef = useRef<HTMLInputElement>(null)
+  const projectNameInputRef = useRef<HTMLInputElement>(null)
+
+  // Sync projects when modal opens
+  useEffect(() => {
+    if (open) {
+      syncProjects()
+    }
+  }, [open, syncProjects])
 
   // Initialize form with task data when modal opens or task changes
   useEffect(() => {
@@ -87,6 +98,28 @@ export function EditTaskModal({ task, open, onOpenChange }: EditTaskModalProps) 
 
   const handleCancel = () => {
     onOpenChange(false)
+  }
+
+  const handleCreateProject = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newProjectName.trim()) return
+
+    try {
+      const newProject = await addProject({
+        name: newProjectName.trim(),
+        color: undefined, // Optional color, can be added later
+      })
+      setProjectId(newProject.id)
+      setNewProjectName('')
+      setIsCreateProjectOpen(false)
+    } catch (error) {
+      console.error('Failed to create project:', error)
+    }
+  }
+
+  const handleCancelCreateProject = () => {
+    setNewProjectName('')
+    setIsCreateProjectOpen(false)
   }
 
   if (!task) return null
@@ -191,9 +224,19 @@ export function EditTaskModal({ task, open, onOpenChange }: EditTaskModalProps) 
                         </div>
 
                         <div>
-                          <label htmlFor="edit-task-project" className="mb-1 block text-sm font-medium text-foreground">
-                            Project
-                          </label>
+                          <div className="mb-1 flex items-center justify-between">
+                            <label htmlFor="edit-task-project" className="block text-sm font-medium text-foreground">
+                              Project
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => setIsCreateProjectOpen(true)}
+                              className="focus-ring flex items-center gap-1 rounded px-2 py-1 text-xs text-primary-500 transition-colors hover:bg-primary-50 dark:hover:bg-primary-900/20"
+                            >
+                              <Plus className="h-3 w-3" />
+                              New Project
+                            </button>
+                          </div>
                           <select
                             id="edit-task-project"
                             value={projectId}
@@ -207,6 +250,9 @@ export function EditTaskModal({ task, open, onOpenChange }: EditTaskModalProps) 
                               </option>
                             ))}
                           </select>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Projects help organize related tasks together
+                          </p>
                         </div>
 
                         <div>
@@ -318,6 +364,85 @@ export function EditTaskModal({ task, open, onOpenChange }: EditTaskModalProps) 
           )}
         </AnimatePresence>
       </Dialog.Portal>
+
+      {/* Create Project Dialog */}
+      <Dialog.Root open={isCreateProjectOpen} onOpenChange={setIsCreateProjectOpen}>
+        <Dialog.Portal>
+          <AnimatePresence>
+            {isCreateProjectOpen && (
+              <>
+                <Dialog.Overlay asChild>
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="fixed inset-0 z-[60] bg-black/50"
+                  />
+                </Dialog.Overlay>
+                <Dialog.Content
+                  className="fixed z-[60] w-full rounded-2xl border border-border bg-card shadow-xl p-0"
+                  style={{
+                    left: '50%',
+                    top: '50%',
+                    transform: 'translate(-50%, -50%)',
+                    maxWidth: '24rem',
+                    width: '90%',
+                  }}
+                >
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    className="p-6"
+                  >
+                    <Dialog.Title className="mb-2 text-lg font-semibold text-foreground">
+                      Create New Project
+                    </Dialog.Title>
+                    <Dialog.Description className="mb-4 text-sm text-muted-foreground">
+                      Create a new project to organize related tasks together.
+                    </Dialog.Description>
+                    <form onSubmit={handleCreateProject}>
+                      <div className="space-y-4">
+                        <div>
+                          <label htmlFor="new-project-name" className="mb-1 block text-sm font-medium text-foreground">
+                            Project Name <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            ref={projectNameInputRef}
+                            id="new-project-name"
+                            type="text"
+                            value={newProjectName}
+                            onChange={(e) => setNewProjectName(e.target.value)}
+                            className="focus-ring w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground"
+                            placeholder="Enter project name"
+                            required
+                            autoFocus
+                          />
+                        </div>
+                      </div>
+                      <div className="mt-6 flex justify-end gap-3">
+                        <button
+                          type="button"
+                          onClick={handleCancelCreateProject}
+                          className="focus-ring rounded-lg px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          className="focus-ring rounded-lg bg-primary-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-600"
+                        >
+                          Create
+                        </button>
+                      </div>
+                    </form>
+                  </motion.div>
+                </Dialog.Content>
+              </>
+            )}
+          </AnimatePresence>
+        </Dialog.Portal>
+      </Dialog.Root>
     </Dialog.Root>
   )
 }

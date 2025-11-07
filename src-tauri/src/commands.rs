@@ -368,13 +368,14 @@ pub fn toggle_complete(
     let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
     
     // Get current task state
-    let task_info: (Option<i64>, String, i32) = db.conn.query_row(
-        "SELECT completed_at, recurrence_type, recurrence_interval FROM tasks WHERE id = ?1",
+    let task_info: (Option<i64>, String, i32, String) = db.conn.query_row(
+        "SELECT completed_at, recurrence_type, recurrence_interval, priority FROM tasks WHERE id = ?1",
         params![id],
-        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
     ).map_err(|e| format!("Task not found: {}", e))?;
     
-    let (completed, recurrence_type, recurrence_interval) = task_info;
+    let (completed, recurrence_type, recurrence_interval, priority) = task_info;
+    let was_completed = completed.is_some();
     let now = now();
     let new_completed = if completed.is_some() { None } else { Some(now) };
     
@@ -386,6 +387,26 @@ pub fn toggle_complete(
     // If task is being marked complete and has recurrence, create new instance
     if new_completed.is_some() && recurrence_type != "none" {
         create_recurring_instance(&db.conn, &id, &recurrence_type, recurrence_interval)?;
+    }
+    
+    // Handle gamification: grant XP and update streak if task is being completed
+    if new_completed.is_some() && !was_completed {
+        // Determine XP amount based on priority
+        let xp_amount = match priority.as_str() {
+            "low" => 10,
+            "medium" => 25,
+            "high" => 50,
+            _ => 25,
+        };
+        
+        // Grant XP
+        let _ = grant_xp_internal(&db.conn, xp_amount, "task_completion".to_string(), Some(id.clone()));
+        
+        // Update streak
+        let _ = update_streak_internal(&db.conn);
+        
+        // Check for badges
+        let _ = check_and_award_badges_internal(&db.conn);
     }
     
     fetch_task(&db.conn, &id)
@@ -1494,4 +1515,377 @@ pub fn create_task_from_template(
     ).map_err(|e| format!("Failed to create task from template: {}", e))?;
     
     fetch_task(&db.conn, &id)
+}
+
+// Gamification data structures
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserProgress {
+    pub id: String,
+    pub total_xp: i64,
+    pub current_level: i32,
+    pub current_streak: i32,
+    pub longest_streak: i32,
+    pub last_completion_date: Option<i64>,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Badge {
+    pub id: String,
+    pub user_id: String,
+    pub badge_type: String,
+    pub earned_at: i64,
+    pub metadata: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct XpHistoryEntry {
+    pub id: String,
+    pub user_id: String,
+    pub xp_amount: i32,
+    pub source: String,
+    pub task_id: Option<String>,
+    pub created_at: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GrantXpResult {
+    pub level_up: bool,
+    pub new_level: i32,
+    pub total_xp: i64,
+    pub current_xp: i64,
+    pub xp_to_next_level: i64,
+}
+
+// Helper function to calculate level from total XP
+// Formula: level = floor(sqrt(totalXp / 100)) + 1
+fn calculate_level(total_xp: i64) -> i32 {
+    if total_xp <= 0 {
+        return 1;
+    }
+    ((total_xp as f64 / 100.0).sqrt().floor() as i32) + 1
+}
+
+// Helper function to calculate XP needed for next level
+// Formula: xpToNextLevel = (level * 100) * level
+fn calculate_xp_to_next_level(level: i32) -> i64 {
+    (level as i64 * 100) * level as i64
+}
+
+// Helper function to calculate current XP within current level
+fn calculate_current_xp(total_xp: i64, level: i32) -> i64 {
+    if level == 1 {
+        return total_xp;
+    }
+    // Calculate total XP needed to reach current level
+    let mut xp_for_current_level = 0i64;
+    for i in 1..level {
+        xp_for_current_level += calculate_xp_to_next_level(i);
+    }
+    total_xp - xp_for_current_level
+}
+
+// Internal helper functions for gamification (work directly with connection)
+fn grant_xp_internal(conn: &rusqlite::Connection, xp: i32, source: String, task_id: Option<String>) -> Result<GrantXpResult, String> {
+    let progress = get_user_progress_internal(conn)?;
+    
+    let previous_level = progress.current_level;
+    let new_total_xp = (progress.total_xp + xp as i64).max(0);
+    let new_level = calculate_level(new_total_xp);
+    let new_xp_to_next_level = calculate_xp_to_next_level(new_level);
+    let new_current_xp = calculate_current_xp(new_total_xp, new_level);
+    let leveled_up = new_level > previous_level;
+    
+    // Update user progress
+    let now = now();
+    conn.execute(
+        "UPDATE user_progress SET total_xp = ?1, current_level = ?2, updated_at = ?3 WHERE id = 'default'",
+        params![new_total_xp, new_level, now],
+    ).map_err(|e| format!("Failed to update user progress: {}", e))?;
+    
+    // Record in XP history
+    let history_id = uuid::Uuid::new_v4().to_string();
+    conn.execute(
+        "INSERT INTO xp_history (id, user_id, xp_amount, source, task_id, created_at) VALUES (?1, 'default', ?2, ?3, ?4, ?5)",
+        params![history_id, xp, source, task_id, now],
+    ).map_err(|e| format!("Failed to record XP history: {}", e))?;
+    
+    Ok(GrantXpResult {
+        level_up: leveled_up,
+        new_level,
+        total_xp: new_total_xp,
+        current_xp: new_current_xp,
+        xp_to_next_level: new_xp_to_next_level,
+    })
+}
+
+pub(crate) fn update_streak_internal(conn: &rusqlite::Connection) -> Result<UserProgress, String> {
+    let mut progress = get_user_progress_internal(conn)?;
+    
+    // Get today's date at midnight (Unix timestamp)
+    let current_time = now();
+    let today_start = (current_time / 86400) * 86400; // Round down to start of day
+    let today_end = today_start + 86400 - 1; // End of day
+    
+    // Check if user completed at least one task today
+    let tasks_completed_today: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM tasks WHERE completed_at IS NOT NULL AND completed_at >= ?1 AND completed_at < ?2",
+        params![today_start, today_end],
+        |row| row.get(0),
+    ).unwrap_or(0);
+    
+    let has_completed_today = tasks_completed_today > 0;
+    
+    if has_completed_today {
+        if let Some(last_completion) = progress.last_completion_date {
+            let last_completion_day = (last_completion / 86400) * 86400;
+            let yesterday_start = today_start - 86400;
+            
+            if last_completion_day == yesterday_start {
+                // Last completion was yesterday - increment streak
+                progress.current_streak += 1;
+            } else if last_completion_day < yesterday_start {
+                // Last completion was more than 1 day ago - reset streak to 1
+                progress.current_streak = 1;
+            }
+            // If last_completion_day == today_start, no change (already counted today)
+        } else {
+            // No previous completion date - start streak at 1
+            progress.current_streak = 1;
+        }
+        
+        // Update longest streak if current exceeds it
+        if progress.current_streak > progress.longest_streak {
+            progress.longest_streak = progress.current_streak;
+        }
+        
+        // Update last completion date to today
+        progress.last_completion_date = Some(today_start);
+    }
+    
+    // Update database
+    let update_time = now();
+    conn.execute(
+        "UPDATE user_progress SET current_streak = ?1, longest_streak = ?2, last_completion_date = ?3, updated_at = ?4 WHERE id = 'default'",
+        params![progress.current_streak, progress.longest_streak, progress.last_completion_date, update_time],
+    ).map_err(|e| format!("Failed to update streak: {}", e))?;
+    
+    progress.updated_at = update_time;
+    Ok(progress)
+}
+
+fn check_and_award_badges_internal(conn: &rusqlite::Connection) -> Result<Vec<Badge>, String> {
+    let progress = get_user_progress_internal(conn)?;
+    
+    // Get total tasks completed
+    let total_tasks_completed: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM tasks WHERE completed_at IS NOT NULL",
+        [],
+        |row| row.get(0),
+    ).unwrap_or(0);
+    
+    // Get already earned badges
+    let mut stmt = conn.prepare("SELECT id, user_id, badge_type, earned_at, metadata FROM badges WHERE user_id = 'default' ORDER BY earned_at DESC")
+        .map_err(|e| format!("Query error: {}", e))?;
+    
+    let rows = stmt.query_map([], |row| {
+        Ok(Badge {
+            id: row.get(0)?,
+            user_id: row.get(1)?,
+            badge_type: row.get(2)?,
+            earned_at: row.get(3)?,
+            metadata: row.get(4)?,
+        })
+    }).map_err(|e| format!("Query execution error: {}", e))?;
+    
+    let mut earned_badges = Vec::new();
+    for row in rows {
+        earned_badges.push(row.map_err(|e| format!("Row parsing error: {}", e))?);
+    }
+    
+    let earned_types: std::collections::HashSet<String> = earned_badges.iter()
+        .map(|b| b.badge_type.clone())
+        .collect();
+    
+    let mut newly_awarded = Vec::new();
+    let now = now();
+    
+    // Check each badge criteria
+    // first_task: total_tasks_completed >= 1
+    if total_tasks_completed >= 1 && !earned_types.contains("first_task") {
+        let badge_id = uuid::Uuid::new_v4().to_string();
+        let metadata = serde_json::json!({"milestone": 1}).to_string();
+        conn.execute(
+            "INSERT INTO badges (id, user_id, badge_type, earned_at, metadata) VALUES (?1, 'default', 'first_task', ?2, ?3)",
+            params![badge_id.clone(), now, metadata],
+        ).map_err(|e| format!("Failed to award badge: {}", e))?;
+        
+        newly_awarded.push(Badge {
+            id: badge_id,
+            user_id: "default".to_string(),
+            badge_type: "first_task".to_string(),
+            earned_at: now,
+            metadata: Some(serde_json::json!({"milestone": 1}).to_string()),
+        });
+    }
+    
+    // task_master_100: total_tasks_completed >= 100
+    if total_tasks_completed >= 100 && !earned_types.contains("task_master_100") {
+        let badge_id = uuid::Uuid::new_v4().to_string();
+        let metadata = serde_json::json!({"milestone": 100}).to_string();
+        conn.execute(
+            "INSERT INTO badges (id, user_id, badge_type, earned_at, metadata) VALUES (?1, 'default', 'task_master_100', ?2, ?3)",
+            params![badge_id.clone(), now, metadata],
+        ).map_err(|e| format!("Failed to award badge: {}", e))?;
+        
+        newly_awarded.push(Badge {
+            id: badge_id,
+            user_id: "default".to_string(),
+            badge_type: "task_master_100".to_string(),
+            earned_at: now,
+            metadata: Some(serde_json::json!({"milestone": 100}).to_string()),
+        });
+    }
+    
+    // week_warrior: current_streak == 7
+    if progress.current_streak == 7 && !earned_types.contains("week_warrior") {
+        let badge_id = uuid::Uuid::new_v4().to_string();
+        let metadata = serde_json::json!({"streak": 7}).to_string();
+        conn.execute(
+            "INSERT INTO badges (id, user_id, badge_type, earned_at, metadata) VALUES (?1, 'default', 'week_warrior', ?2, ?3)",
+            params![badge_id.clone(), now, metadata],
+        ).map_err(|e| format!("Failed to award badge: {}", e))?;
+        
+        newly_awarded.push(Badge {
+            id: badge_id,
+            user_id: "default".to_string(),
+            badge_type: "week_warrior".to_string(),
+            earned_at: now,
+            metadata: Some(serde_json::json!({"streak": 7}).to_string()),
+        });
+    }
+    
+    // level_10: level == 10
+    if progress.current_level == 10 && !earned_types.contains("level_10") {
+        let badge_id = uuid::Uuid::new_v4().to_string();
+        let metadata = serde_json::json!({"level": 10}).to_string();
+        conn.execute(
+            "INSERT INTO badges (id, user_id, badge_type, earned_at, metadata) VALUES (?1, 'default', 'level_10', ?2, ?3)",
+            params![badge_id.clone(), now, metadata],
+        ).map_err(|e| format!("Failed to award badge: {}", e))?;
+        
+        newly_awarded.push(Badge {
+            id: badge_id,
+            user_id: "default".to_string(),
+            badge_type: "level_10".to_string(),
+            earned_at: now,
+            metadata: Some(serde_json::json!({"level": 10}).to_string()),
+        });
+    }
+    
+    Ok(newly_awarded)
+}
+
+// Helper function to get user progress from connection (internal use)
+fn get_user_progress_internal(conn: &rusqlite::Connection) -> Result<UserProgress, String> {
+    let result = conn.query_row(
+        "SELECT id, total_xp, current_level, current_streak, longest_streak, last_completion_date, created_at, updated_at FROM user_progress WHERE id = 'default'",
+        [],
+        |row| {
+            Ok(UserProgress {
+                id: row.get(0)?,
+                total_xp: row.get(1)?,
+                current_level: row.get(2)?,
+                current_streak: row.get(3)?,
+                longest_streak: row.get(4)?,
+                last_completion_date: row.get(5)?,
+                created_at: row.get(6)?,
+                updated_at: row.get(7)?,
+            })
+        },
+    );
+    
+    match result {
+        Ok(progress) => Ok(progress),
+        Err(_) => {
+            // Create default user progress if it doesn't exist
+            let now = now();
+            conn.execute(
+                "INSERT INTO user_progress (id, total_xp, current_level, current_streak, longest_streak, created_at, updated_at) VALUES ('default', 0, 1, 0, 0, ?1, ?2)",
+                params![now, now],
+            ).map_err(|e| format!("Failed to create user progress: {}", e))?;
+            
+            Ok(UserProgress {
+                id: "default".to_string(),
+                total_xp: 0,
+                current_level: 1,
+                current_streak: 0,
+                longest_streak: 0,
+                last_completion_date: None,
+                created_at: now,
+                updated_at: now,
+            })
+        }
+    }
+}
+
+// Gamification commands
+#[tauri::command]
+pub fn get_user_progress(db: State<'_, Arc<Mutex<DbConnection>>>) -> Result<UserProgress, String> {
+    let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+    get_user_progress_internal(&db.conn)
+}
+
+#[tauri::command]
+pub fn grant_xp(
+    db: State<'_, Arc<Mutex<DbConnection>>>,
+    xp: i32,
+    source: String,
+    task_id: Option<String>,
+) -> Result<GrantXpResult, String> {
+    let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+    grant_xp_internal(&db.conn, xp, source, task_id)
+}
+
+#[tauri::command]
+pub fn update_streak(db: State<'_, Arc<Mutex<DbConnection>>>) -> Result<UserProgress, String> {
+    let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+    update_streak_internal(&db.conn)
+}
+
+#[tauri::command]
+pub fn check_streak_on_startup(db: State<'_, Arc<Mutex<DbConnection>>>) -> Result<UserProgress, String> {
+    update_streak(db)
+}
+
+#[tauri::command]
+pub fn get_badges(db: State<'_, Arc<Mutex<DbConnection>>>) -> Result<Vec<Badge>, String> {
+    let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+    
+    let mut stmt = db.conn.prepare("SELECT id, user_id, badge_type, earned_at, metadata FROM badges WHERE user_id = 'default' ORDER BY earned_at DESC")
+        .map_err(|e| format!("Query error: {}", e))?;
+    
+    let rows = stmt.query_map([], |row| {
+        Ok(Badge {
+            id: row.get(0)?,
+            user_id: row.get(1)?,
+            badge_type: row.get(2)?,
+            earned_at: row.get(3)?,
+            metadata: row.get(4)?,
+        })
+    }).map_err(|e| format!("Query execution error: {}", e))?;
+    
+    let mut badges = Vec::new();
+    for row in rows {
+        badges.push(row.map_err(|e| format!("Row parsing error: {}", e))?);
+    }
+    
+    Ok(badges)
+}
+
+#[tauri::command]
+pub fn check_and_award_badges(db: State<'_, Arc<Mutex<DbConnection>>>) -> Result<Vec<Badge>, String> {
+    let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+    check_and_award_badges_internal(&db.conn)
 }
