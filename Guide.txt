@@ -1,0 +1,228 @@
+Feature: Advanced Pomodoro Timer Integration
+
+Ticket ID: FEAT-004
+Priority: High
+Effort: Medium
+Assignee: TBD
+
+1. User Story
+
+As a user, I want an integrated Pomodoro timer so that I can focus on specific tasks for set intervals, manage my breaks effectively, and have my completed sessions automatically contribute to my productivity tracking and gamification stats.
+
+2. Acceptance Criteria
+
+Core Timer Functionality
+
+Timer Display: A highly visible timer (e.g., in the Header.tsx or a floating component) shows the current MM:SS.
+
+Timer Modes: The timer must have three modes:
+
+Pomodoro: (Default: 25 minutes) For focused work.
+
+Short Break: (Default: 5 minutes)
+
+Long Break: (Default: 15 minutes) Taken after a set number of Pomodoro cycles (Default: 4).
+
+Controls: The timer must have Start, Pause, Resume, and Reset controls.
+
+State Transitions:
+
+Idle -> Start -> Running (Pomodoro)
+
+Running -> Pause -> Paused
+
+Paused -> Resume -> Running
+
+Running -> Finish (Pomodoro) -> Idle (Short/Long Break)
+
+Automatic Cycling: When a Pomodoro timer finishes:
+
+A system notification is sent ("Time for a break!").
+
+A toast notification appears.
+
+The cycle count increments.
+
+The timer automatically switches to the correct break mode (Short or Long).
+
+The user must manually start the break timer.
+
+Break Completion: When a break timer finishes:
+
+A system notification is sent ("Break's over! Time to focus.").
+
+A toast notification appears.
+
+The timer automatically switches back to Pomodoro mode, ready to be started.
+
+Task Integration
+
+Task Selection: Before starting a Pomodoro, the user must be able to select a task from their "All Tasks" or "Dashboard" list to associate with the session.
+
+This could be implemented with a "Start Focus" button/icon on each TaskCard.tsx.
+
+Active Task Display: While the timer is running, the title of the active task is clearly displayed near the timer.
+
+Session Completion: When a Pomodoro timer finishes:
+
+The system prompts the user: "Did you complete [Task Name]?"
+
+If "Yes":
+
+The task is marked as complete (using useTasks store).
+
+XP is awarded for the task (using useXp store).
+
+If "No":
+
+The task remains incomplete.
+
+Gamification:
+
+Completing a full Pomodoro session (not the task, just the 25-min block) grants a small, fixed amount of XP (e.g., 5 XP) via useXp.addXp(). This rewards the act of focusing.
+
+This "focus XP" is awarded in addition to any XP gained from completing the associated task.
+
+Settings & Persistence
+
+Settings Page Integration: A new "Pomodoro" section must be added to the Settings.tsx page.
+
+Configurable Durations: Users can customize the duration (in minutes) for:
+
+Pomodoro
+
+Short Break
+
+Long Break
+
+Configurable Cycles: Users can customize the "Long Break Interval" (number of Pomodoros before a long break).
+
+Setting Persistence: All Pomodoro settings must be saved to the database, similar to other settings.
+
+State Persistence: The current timer state (mode, remaining time, cycle count) must be persisted (e.g., in localStorage via the Zustand store) so the timer survives an app refresh.
+
+3. Technical Implementation Plan
+
+1. State Management (Zustand)
+
+Create a new store: src/store/useTimer.ts.
+
+State:
+
+mode: 'pomodoro' | 'shortBreak' | 'longBreak'
+
+status: 'idle' | 'running' | 'paused'
+
+timeLeft: number (in seconds)
+
+cycles: number (count of completed pomodoros in the current set)
+
+settings: { pomodoroTime: number, shortBreakTime: number, longBreakTime: number, longBreakInterval: number }
+
+activeTaskId: string | null
+
+Actions:
+
+startTimer()
+
+pauseTimer()
+
+resetTimer()
+
+setMode(mode)
+
+setActiveTask(taskId)
+
+_tick() (Internal action for the timer loop)
+
+loadSettings(settings)
+
+updateSettings(newSettings)
+
+2. Timer Component
+
+Create a new reusable component: src/components/timer/Timer.tsx.
+
+This component will:
+
+Subscribe to useTimer store.
+
+Manage the setInterval loop for the timer. The interval should be created/cleared based on the status ('running').
+
+The interval's callback will call the _tick() action in the store.
+
+Display MM:SS formatted time from timeLeft.
+
+Render controls (Start, Pause, Reset) and call store actions.
+
+Note: The timer logic (decrementing, mode switching) should live inside the Zustand store actions to keep the component simple and persist logic centrally.
+
+3. UI Integration
+
+Header: Add the <Timer /> component to src/components/Header.tsx, likely on the right side, near the XP bar.
+
+Task Card: Modify src/components/TaskCard.tsx to include a "Focus" icon button (e.g., a "play" or "crosshair" icon).
+
+onClick on this button will:
+
+Call useTimer.setActiveTask(task.id).
+
+Call useTimer.setMode('pomodoro').
+
+Call useTimer.startTimer().
+
+(Optional) Open the app window if it's minimized.
+
+Active Task Display: The Header.tsx should also subscribe to useTimer.activeTaskId and useTasks to display "Focusing on: [Task Title]".
+
+4. Settings Integration
+
+Modify src/pages/Settings.tsx to add form fields for the timer settings.
+
+These fields will read from and update the settings in useTimer store.
+
+useTimer store will be responsible for calling the Tauri command to persist these settings to the database.
+
+5. Backend (Tauri)
+
+Modify src-tauri/src/commands.rs and db.rs to support saving and loading Pomodoro settings.
+
+This will likely involve adding new fields to the settings table or creating a new pomodoro_settings table.
+
+Expose get_pomodoro_settings and update_pomodoro_settings Tauri commands.
+
+Update tauriAdapter.ts to include these new commands.
+
+4. Integration with Existing Systems
+
+useTasks: The timer will call useTasks.toggleTaskCompletion(activeTaskId) when a user confirms task completion.
+
+useXp:
+
+The timer store will call useXp.addXp(5) (or a configurable amount) when a 'pomodoro' session finishes.
+
+The "Did you complete?" dialog, upon "Yes", will trigger the standard task completion flow, which already calls useXp.addXp() based on task priority.
+
+Notifications: The timer store will use the existing tauriAdapter.sendNotification() function for "Break time!" and "Focus time!" alerts.
+
+Toasts: The timer store will use the useToast() hook (from shadcn/ui) for non-intrusive notifications.
+
+5. Definition of Done
+
+[ ] All Acceptance Criteria are met.
+
+[ ] Timer state (timeLeft, mode, status, cycle) persists on app restart.
+
+[ ] Timer settings (durations, interval) are configurable on the Settings page and persist.
+
+[ ] User can select a task to focus on.
+
+[ ] Completing a Pomodoro session grants "focus" XP.
+
+[ ] User is prompted to complete the task when the timer finishes.
+
+[ ] System and toast notifications are working for all state transitions.
+
+[ ] Code is clean, commented, and follows existing project structure.
+
+[ ] Feature is documented in STATUS.md.

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import * as tauriAdapter from '../api/tauriAdapter'
 import { isTauri } from '../utils/tauri'
 import { TemplatesModal } from '../components/TemplatesModal'
+import { useTimer } from '../store/useTimer'
 
 export function Settings() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(false)
@@ -13,10 +14,12 @@ export function Settings() {
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [isTemplatesOpen, setIsTemplatesOpen] = useState(false)
+  const { settings: timerSettings, updateSettings: updateTimerSettings, loadSettings: loadTimerSettings } = useTimer()
 
   useEffect(() => {
     loadSettings()
-  }, [])
+    loadTimerSettings()
+  }, [loadTimerSettings])
 
   useEffect(() => {
     const handleOpenTemplates = () => setIsTemplatesOpen(true)
@@ -365,6 +368,116 @@ export function Settings() {
               />
               <div className="peer h-6 w-11 rounded-full bg-gray-200 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:bg-primary-500 peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 dark:bg-gray-700 dark:peer-focus:ring-primary-800"></div>
             </label>
+          </div>
+        </div>
+
+        {/* Pomodoro Settings */}
+        <div className="rounded-xl border border-border bg-card p-6">
+          <h3 className="mb-4 text-lg font-semibold text-foreground">Pomodoro Timer</h3>
+          <div className="space-y-4">
+            <div>
+              <label htmlFor="pomodoro-time" className="mb-1 block text-sm font-medium text-foreground">
+                Pomodoro Duration (minutes)
+              </label>
+              <input
+                id="pomodoro-time"
+                type="number"
+                min="1"
+                max="60"
+                value={timerSettings.pomodoroTime}
+                onChange={async (e) => {
+                  const value = parseInt(e.target.value) || 25
+                  try {
+                    await updateTimerSettings({ pomodoroTime: value })
+                    showMessage('success', 'Pomodoro duration saved')
+                  } catch (error) {
+                    showMessage('error', 'Failed to save Pomodoro duration')
+                  }
+                }}
+                className="focus-ring w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                Default: 25 minutes
+              </p>
+            </div>
+
+            <div>
+              <label htmlFor="short-break-time" className="mb-1 block text-sm font-medium text-foreground">
+                Short Break Duration (minutes)
+              </label>
+              <input
+                id="short-break-time"
+                type="number"
+                min="1"
+                max="30"
+                value={timerSettings.shortBreakTime}
+                onChange={async (e) => {
+                  const value = parseInt(e.target.value) || 5
+                  try {
+                    await updateTimerSettings({ shortBreakTime: value })
+                    showMessage('success', 'Short break duration saved')
+                  } catch (error) {
+                    showMessage('error', 'Failed to save short break duration')
+                  }
+                }}
+                className="focus-ring w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                Default: 5 minutes
+              </p>
+            </div>
+
+            <div>
+              <label htmlFor="long-break-time" className="mb-1 block text-sm font-medium text-foreground">
+                Long Break Duration (minutes)
+              </label>
+              <input
+                id="long-break-time"
+                type="number"
+                min="1"
+                max="60"
+                value={timerSettings.longBreakTime}
+                onChange={async (e) => {
+                  const value = parseInt(e.target.value) || 15
+                  try {
+                    await updateTimerSettings({ longBreakTime: value })
+                    showMessage('success', 'Long break duration saved')
+                  } catch (error) {
+                    showMessage('error', 'Failed to save long break duration')
+                  }
+                }}
+                className="focus-ring w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                Default: 15 minutes
+              </p>
+            </div>
+
+            <div>
+              <label htmlFor="long-break-interval" className="mb-1 block text-sm font-medium text-foreground">
+                Long Break Interval
+              </label>
+              <input
+                id="long-break-interval"
+                type="number"
+                min="2"
+                max="10"
+                value={timerSettings.longBreakInterval}
+                onChange={async (e) => {
+                  const value = parseInt(e.target.value) || 4
+                  try {
+                    await updateTimerSettings({ longBreakInterval: value })
+                    showMessage('success', 'Long break interval saved')
+                  } catch (error) {
+                    showMessage('error', 'Failed to save long break interval')
+                  }
+                }}
+                className="focus-ring w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                Number of Pomodoros before a long break. Default: 4
+              </p>
+            </div>
           </div>
         </div>
 

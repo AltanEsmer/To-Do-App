@@ -1,12 +1,13 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Bell } from 'lucide-react'
+import { X, Bell, Edit } from 'lucide-react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { Task, useTasks } from '../store/useTasks'
 import * as tauriAdapter from '../api/tauriAdapter'
 import { isTauri } from '../utils/tauri'
 import clsx from 'clsx'
 import { useKeyboardShortcuts } from '../utils/useKeyboardShortcuts'
+import { EditTaskModal } from './EditTaskModal'
 
 interface TaskDetailsModalProps {
   task: Task | null
@@ -15,19 +16,129 @@ interface TaskDetailsModalProps {
 }
 
 export function TaskDetailsModal({ task, open, onOpenChange }: TaskDetailsModalProps) {
-  const { updateTask } = useTasks()
+  const { updateTask, getTaskById } = useTasks()
   const [attachments, setAttachments] = useState<tauriAdapter.Attachment[]>([])
+  const [imageUrls, setImageUrls] = useState<Map<string, string>>(new Map())
   const [loading, setLoading] = useState(false)
   const [reminderMinutesBefore, setReminderMinutesBefore] = useState<number | null>(null)
   const [notificationRepeat, setNotificationRepeat] = useState(false)
+  const [editModalOpen, setEditModalOpen] = useState(false)
+  const [currentTask, setCurrentTask] = useState<Task | null>(task)
+
+  const isImage = (attachment: tauriAdapter.Attachment): boolean => {
+    // Check by MIME type
+    if (attachment.mime && attachment.mime.startsWith('image/')) {
+      return true
+    }
+    // Check by file extension
+    const ext = attachment.filename.split('.').pop()?.toLowerCase()
+    const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'ico']
+    return ext ? imageExtensions.includes(ext) : false
+  }
+
+  const getImageUrl = async (attachment: tauriAdapter.Attachment): Promise<string | null> => {
+    if (!isTauri()) return null
+    try {
+      const { appDataDir } = await import('@tauri-apps/api/path')
+      const { join } = await import('@tauri-apps/api/path')
+      const { readBinaryFile } = await import('@tauri-apps/api/fs')
+      const dataDir = await appDataDir()
+      const fullPath = await join(dataDir, attachment.path)
+      
+      console.log('Loading image:', { filename: attachment.filename, path: attachment.path, fullPath })
+      
+      // Read the file as binary
+      const fileData = await readBinaryFile(fullPath)
+      
+      if (!fileData || fileData.length === 0) {
+        console.error('File is empty or could not be read:', fullPath)
+        return null
+      }
+      
+      // Determine MIME type
+      const mimeType = attachment.mime || 
+        (attachment.filename.toLowerCase().endsWith('.png') ? 'image/png' :
+         attachment.filename.toLowerCase().endsWith('.gif') ? 'image/gif' :
+         attachment.filename.toLowerCase().endsWith('.webp') ? 'image/webp' :
+         'image/jpeg')
+      
+      // Create a blob URL from the binary data
+      const blob = new Blob([fileData], { type: mimeType })
+      const url = URL.createObjectURL(blob)
+      console.log('Created blob URL for image:', attachment.filename)
+      return url
+    } catch (error) {
+      console.error('Failed to get image URL:', error, { attachment })
+      return null
+    }
+  }
+
+  const loadAttachments = useCallback(async () => {
+    if (!currentTask) return
+    try {
+      // Clean up old blob URLs
+      setImageUrls((prevUrls) => {
+        prevUrls.forEach((url) => {
+          URL.revokeObjectURL(url)
+        })
+        return new Map()
+      })
+      
+      const atts = await tauriAdapter.getAttachments(currentTask.id)
+      setAttachments(atts)
+      
+      // Load image URLs for image attachments
+      const urlMap = new Map<string, string>()
+      for (const att of atts) {
+        if (isImage(att)) {
+          const url = await getImageUrl(att)
+          if (url) {
+            urlMap.set(att.id, url)
+          }
+        }
+      }
+      setImageUrls(urlMap)
+    } catch (error) {
+      console.error('Failed to load attachments:', error)
+    }
+  }, [currentTask])
+
+  // Update current task when task prop changes
+  useEffect(() => {
+    setCurrentTask(task)
+  }, [task])
 
   useEffect(() => {
-    if (open && task) {
+    if (open && currentTask) {
       loadAttachments()
-      setReminderMinutesBefore(task.reminderMinutesBefore || null)
-      setNotificationRepeat(task.notificationRepeat || false)
+      setReminderMinutesBefore(currentTask.reminderMinutesBefore || null)
+      setNotificationRepeat(currentTask.notificationRepeat || false)
     }
-  }, [open, task])
+  }, [open, currentTask, loadAttachments])
+
+  // Cleanup blob URLs when component unmounts or modal closes
+  useEffect(() => {
+    return () => {
+      imageUrls.forEach((url) => {
+        URL.revokeObjectURL(url)
+      })
+    }
+  }, [imageUrls])
+
+  // Refresh task data when edit modal closes
+  useEffect(() => {
+    if (!editModalOpen && open && currentTask) {
+      // Get the latest task from the store
+      const updatedTask = getTaskById(currentTask.id)
+      if (updatedTask) {
+        setCurrentTask(updatedTask)
+        setReminderMinutesBefore(updatedTask.reminderMinutesBefore || null)
+        setNotificationRepeat(updatedTask.notificationRepeat || false)
+      }
+      // Reload attachments
+      loadAttachments()
+    }
+  }, [editModalOpen, open, currentTask, getTaskById, loadAttachments])
 
   useKeyboardShortcuts({
     onEscape: () => {
@@ -38,18 +149,8 @@ export function TaskDetailsModal({ task, open, onOpenChange }: TaskDetailsModalP
     disabled: !open,
   })
 
-  const loadAttachments = async () => {
-    if (!task) return
-    try {
-      const atts = await tauriAdapter.getAttachments(task.id)
-      setAttachments(atts)
-    } catch (error) {
-      console.error('Failed to load attachments:', error)
-    }
-  }
-
   const handleAddAttachment = async () => {
-    if (!task) return
+    if (!currentTask) return
     if (!isTauri()) {
       alert('Attachments are only available in Tauri desktop app. Use npm run tauri:dev to run the desktop version.')
       return
@@ -58,13 +159,17 @@ export function TaskDetailsModal({ task, open, onOpenChange }: TaskDetailsModalP
       const { open } = await import('@tauri-apps/api/dialog')
       const selected = await open({
         multiple: false,
-        title: 'Select file to attach',
+        title: 'Select image to attach',
+        filters: [{
+          name: 'Images',
+          extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg']
+        }]
       })
 
       if (selected && typeof selected === 'string') {
         setLoading(true)
         try {
-          await tauriAdapter.addAttachment(task.id, selected)
+          await tauriAdapter.addAttachment(currentTask.id, selected)
           await loadAttachments()
         } catch (error) {
           console.error('Failed to add attachment:', error)
@@ -103,7 +208,7 @@ export function TaskDetailsModal({ task, open, onOpenChange }: TaskDetailsModalP
     }
   }
 
-  if (!task) return null
+  if (!currentTask) return null
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -135,21 +240,33 @@ export function TaskDetailsModal({ task, open, onOpenChange }: TaskDetailsModalP
                   }}
                 >
                   <div className="p-6 flex-shrink-0 border-b border-border">
-                    <Dialog.Title className="text-lg font-semibold text-foreground">
-                      {task.title}
-                    </Dialog.Title>
+                    <div className="flex items-center justify-between">
+                      <Dialog.Title className="text-lg font-semibold text-foreground">
+                        {currentTask.title}
+                      </Dialog.Title>
+                      <button
+                        onClick={() => {
+                          setEditModalOpen(true)
+                        }}
+                        className="focus-ring flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+                        aria-label="Edit task"
+                      >
+                        <Edit className="h-4 w-4" />
+                        Edit
+                      </button>
+                    </div>
                   </div>
 
                   <div className="p-6 flex-1 overflow-y-auto">
                     <div className="space-y-4">
-                      {task.description && (
+                      {currentTask.description && (
                         <div>
                           <h4 className="mb-2 text-sm font-medium text-foreground">Description</h4>
-                          <p className="text-sm text-muted-foreground">{task.description}</p>
+                          <p className="text-sm text-muted-foreground">{currentTask.description}</p>
                         </div>
                       )}
 
-                      {task.dueDate && (
+                      {currentTask.dueDate && (
                         <div>
                           <div className="mb-2 flex items-center gap-2">
                             <Bell className="h-4 w-4 text-muted-foreground" />
@@ -166,8 +283,8 @@ export function TaskDetailsModal({ task, open, onOpenChange }: TaskDetailsModalP
                                 onChange={(e) => {
                                   const value = e.target.value ? parseInt(e.target.value) : null
                                   setReminderMinutesBefore(value)
-                                  if (task) {
-                                    updateTask(task.id, {
+                                  if (currentTask) {
+                                    updateTask(currentTask.id, {
                                       reminderMinutesBefore: value || undefined,
                                       notificationRepeat: value ? notificationRepeat : false,
                                     }).catch(console.error)
@@ -191,8 +308,8 @@ export function TaskDetailsModal({ task, open, onOpenChange }: TaskDetailsModalP
                                   checked={notificationRepeat}
                                   onChange={(e) => {
                                     setNotificationRepeat(e.target.checked)
-                                    if (task) {
-                                      updateTask(task.id, {
+                                    if (currentTask) {
+                                      updateTask(currentTask.id, {
                                         notificationRepeat: e.target.checked,
                                       }).catch(console.error)
                                     }
@@ -210,27 +327,54 @@ export function TaskDetailsModal({ task, open, onOpenChange }: TaskDetailsModalP
 
                       <div>
                         <h4 className="mb-2 text-sm font-medium text-foreground">Attachments</h4>
-                        <div className="space-y-2">
-                          {attachments.map((attachment) => (
-                            <div
-                              key={attachment.id}
-                              className="flex items-center justify-between rounded-lg border border-border bg-background p-2"
-                            >
-                              <button
-                                onClick={() => handleOpenAttachment(attachment)}
-                                className="flex-1 text-left text-sm text-foreground hover:text-primary-500"
-                              >
-                                {attachment.filename}
-                              </button>
-                              <button
-                                onClick={() => handleDeleteAttachment(attachment.id)}
-                                className="ml-2 text-red-600 hover:text-red-700"
-                                aria-label={`Delete ${attachment.filename}`}
-                              >
-                                <X className="h-4 w-4" />
-                              </button>
+                        <div className="space-y-3">
+                          {attachments.filter(isImage).length > 0 ? (
+                            <div className="grid grid-cols-2 gap-3">
+                              {attachments.filter(isImage).map((attachment) => {
+                                const imageUrl = imageUrls.get(attachment.id)
+                                return (
+                                  <div
+                                    key={attachment.id}
+                                    className="relative group rounded-lg border border-border bg-background overflow-hidden"
+                                  >
+                                    {imageUrl ? (
+                                      <img
+                                        src={imageUrl}
+                                        alt={attachment.filename}
+                                        className="w-full h-32 object-cover cursor-pointer bg-muted"
+                                        onClick={() => handleOpenAttachment(attachment)}
+                                        onError={(e) => {
+                                          console.error('Image failed to load:', imageUrl, attachment)
+                                          e.currentTarget.style.display = 'none'
+                                        }}
+                                        onLoad={() => {
+                                          console.log('Image loaded successfully:', attachment.filename)
+                                        }}
+                                      />
+                                    ) : (
+                                      <div className="w-full h-32 flex items-center justify-center bg-muted">
+                                        <span className="text-xs text-muted-foreground">Loading...</span>
+                                      </div>
+                                    )}
+                                    <button
+                                      onClick={() => handleDeleteAttachment(attachment.id)}
+                                      className="absolute top-2 right-2 p-1 rounded-full bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
+                                      aria-label={`Delete ${attachment.filename}`}
+                                    >
+                                      <X className="h-3 w-3" />
+                                    </button>
+                                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-2">
+                                      <p className="text-xs text-white truncate">{attachment.filename}</p>
+                                    </div>
+                                  </div>
+                                )
+                              })}
                             </div>
-                          ))}
+                          ) : (
+                            <p className="text-sm text-muted-foreground text-center py-4">
+                              No images attached
+                            </p>
+                          )}
                           <button
                             onClick={handleAddAttachment}
                             disabled={loading}
@@ -239,7 +383,7 @@ export function TaskDetailsModal({ task, open, onOpenChange }: TaskDetailsModalP
                               loading && 'opacity-50 cursor-not-allowed'
                             )}
                           >
-                            {loading ? 'Adding...' : '+ Add Attachment'}
+                            {loading ? 'Adding...' : '+ Add Image'}
                           </button>
                         </div>
                       </div>
@@ -260,6 +404,11 @@ export function TaskDetailsModal({ task, open, onOpenChange }: TaskDetailsModalP
           )}
         </AnimatePresence>
       </Dialog.Portal>
+      <EditTaskModal
+        task={currentTask}
+        open={editModalOpen}
+        onOpenChange={setEditModalOpen}
+      />
     </Dialog.Root>
   )
 }

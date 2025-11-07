@@ -7,6 +7,7 @@ import { Projects } from './pages/Projects'
 import { Completed } from './pages/Completed'
 import { Settings } from './pages/Settings'
 import { Statistics } from './pages/Statistics'
+import { Pomodoro } from './pages/Pomodoro'
 import { useTasks } from './store/useTasks'
 import { useXp } from './store/useXp'
 import { isTauri } from './utils/tauri'
@@ -72,6 +73,7 @@ function App() {
               <Route path="/completed" element={<Completed />} />
               <Route path="/statistics" element={<Statistics />} />
               <Route path="/settings" element={<Settings />} />
+              <Route path="/pomodoro" element={<Pomodoro />} />
             </Routes>
           </main>
         </div>

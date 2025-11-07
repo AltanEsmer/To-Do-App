@@ -1,7 +1,9 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Check, X } from 'lucide-react'
+import { Check, X, Target } from 'lucide-react'
 import { useTasks, Task } from '../store/useTasks'
+import { useTimer } from '../store/useTimer'
 import { formatTaskDate, isOverdue } from '../utils/dateHelpers'
 import { TaskDetailsModal } from './TaskDetailsModal'
 import clsx from 'clsx'
@@ -16,8 +18,21 @@ interface TaskCardProps {
  */
 export function TaskCard({ task }: TaskCardProps) {
   const { toggleComplete, deleteTask } = useTasks()
+  const { setActiveTask, setMode, startTimer } = useTimer()
+  const navigate = useNavigate()
   const [detailsOpen, setDetailsOpen] = useState(false)
   const isOverdueTask = task.dueDate && !task.completed && isOverdue(task.dueDate)
+
+  const handleFocus = () => {
+    if (task.completed) return
+    setActiveTask(task.id)
+    setMode('pomodoro')
+    navigate('/pomodoro')
+    // Small delay to ensure navigation completes before starting timer
+    setTimeout(() => {
+      startTimer()
+    }, 100)
+  }
 
   const priorityColors = {
     low: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
@@ -102,19 +117,33 @@ export function TaskCard({ task }: TaskCardProps) {
         </div>
       </div>
 
-      <motion.button
-        onClick={() => {
-          deleteTask(task.id).catch((error) => {
-            console.error('Failed to delete task:', error)
-          })
-        }}
-        whileHover={{ scale: 1.1 }}
-        whileTap={{ scale: 0.95 }}
-        className="focus-ring opacity-0 transition-opacity group-hover:opacity-100"
-        aria-label={`Delete task "${task.title}"`}
-      >
-        <X className="h-4 w-4 text-muted-foreground transition-colors hover:text-red-600" />
-      </motion.button>
+      <div className="flex items-center gap-2">
+        {!task.completed && (
+          <motion.button
+            onClick={handleFocus}
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.95 }}
+            className="focus-ring opacity-0 transition-opacity group-hover:opacity-100"
+            aria-label={`Start Pomodoro for "${task.title}"`}
+            title="Start Pomodoro"
+          >
+            <Target className="h-4 w-4 text-muted-foreground transition-colors hover:text-primary-600" />
+          </motion.button>
+        )}
+        <motion.button
+          onClick={() => {
+            deleteTask(task.id).catch((error) => {
+              console.error('Failed to delete task:', error)
+            })
+          }}
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.95 }}
+          className="focus-ring opacity-0 transition-opacity group-hover:opacity-100"
+          aria-label={`Delete task "${task.title}"`}
+        >
+          <X className="h-4 w-4 text-muted-foreground transition-colors hover:text-red-600" />
+        </motion.button>
+      </div>
 
       <TaskDetailsModal task={task} open={detailsOpen} onOpenChange={setDetailsOpen} />
     </motion.div>

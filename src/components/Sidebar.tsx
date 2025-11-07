@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { Home, ClipboardList, CheckCircle2, Settings, BarChart3 } from 'lucide-react'
+import { Home, ClipboardList, CheckCircle2, Settings, BarChart3, Timer } from 'lucide-react'
 import clsx from 'clsx'
 import * as tauriAdapter from '../api/tauriAdapter'
 
@@ -30,6 +30,11 @@ const navItems: NavItem[] = [
     path: '/statistics',
     label: 'Statistics',
     icon: <BarChart3 className="h-5 w-5" />,
+  },
+  {
+    path: '/pomodoro',
+    label: 'Pomodoro',
+    icon: <Timer className="h-5 w-5" />,
   },
   {
     path: '/settings',
