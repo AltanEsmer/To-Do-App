@@ -1,4 +1,5 @@
 import { Moon, Sun } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { useTheme } from '../utils/useTheme'
 import { XPBar } from './ui/XPBar'
 
@@ -6,11 +7,12 @@ import { XPBar } from './ui/XPBar'
  * Header component with app title, XP bar, theme toggle, and placeholder for user menu
  */
 export function Header() {
+  const { t } = useTranslation()
   const { theme, toggleTheme } = useTheme()
 
   return (
     <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-border bg-card px-6 shadow-sm">
-      <h1 className="text-xl font-semibold text-foreground">Todo App</h1>
+      <h1 className="text-xl font-semibold text-foreground">{t('app.title')}</h1>
       <div className="flex flex-1 items-center gap-4 px-8">
         <div className="flex-1 max-w-md">
           <XPBar />

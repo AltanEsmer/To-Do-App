@@ -189,6 +189,9 @@ fn main() {
             commands::check_streak_on_startup,
             commands::get_badges,
             commands::check_and_award_badges,
+            commands::translate_task_content,
+            commands::save_translation_override,
+            commands::get_translation,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

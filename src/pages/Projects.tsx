@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react'
 import { ListTodo } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { useTasks } from '../store/useTasks'
 import { TaskCard } from '../components/TaskCard'
 import { AddTaskModal } from '../components/AddTaskModal'
@@ -15,6 +16,7 @@ import { KeyboardShortcutsModal } from '../components/KeyboardShortcutsModal'
  * Projects page showing all tasks (incomplete and completed)
  */
 export function Projects() {
+  const { t } = useTranslation()
   const { tasks } = useTasks()
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false)
@@ -38,9 +40,9 @@ export function Projects() {
     <div className="flex h-full flex-col">
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-foreground">All Tasks</h2>
+          <h2 className="text-2xl font-bold text-foreground">{t('projects.title')}</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            {incompleteTasks.length} active, {completedTasks.length} completed
+            {t('projects.subtitle', { active: incompleteTasks.length, completed: completedTasks.length })}
           </p>
         </div>
         <button
@@ -48,7 +50,7 @@ export function Projects() {
           className="focus-ring rounded-lg bg-primary-500 px-4 py-2 text-sm font-medium text-white transition-all duration-200 hover:bg-primary-600 hover:scale-105 hover:shadow-lg"
           aria-label="Add new task"
         >
-          + Add Task
+          + {t('task.add')}
         </button>
       </div>
 
@@ -63,7 +65,7 @@ export function Projects() {
       <div className="flex-1 overflow-y-auto">
         {incompleteTasks.length > 0 && (
           <div className="mb-6">
-            <h3 className="mb-3 text-lg font-semibold text-foreground">Active Tasks</h3>
+            <h3 className="mb-3 text-lg font-semibold text-foreground">{t('projects.activeTasks')}</h3>
             <div className="space-y-3">
               {incompleteTasks.map((task) => (
                 <TaskCard key={task.id} task={task} />
@@ -74,7 +76,7 @@ export function Projects() {
 
         {completedTasks.length > 0 && (
           <div>
-            <h3 className="mb-3 text-lg font-semibold text-foreground">Completed</h3>
+            <h3 className="mb-3 text-lg font-semibold text-foreground">{t('projects.completed')}</h3>
             <div className="space-y-3">
               {completedTasks.map((task) => (
                 <TaskCard key={task.id} task={task} />
@@ -86,18 +88,18 @@ export function Projects() {
         {filteredTasks.length === 0 && tasks.length > 0 && (
           <EmptyState
             icon={ListTodo}
-            title="No tasks match your filters"
-            description="Try adjusting your search or filters to find what you're looking for."
+            title={t('projects.noTasksMatch')}
+            description={t('projects.noTasksMatchDesc')}
           />
         )}
 
         {tasks.length === 0 && (
           <EmptyState
             icon={ListTodo}
-            title="No tasks yet"
-            description="Create your first task to get started on your productivity journey!"
+            title={t('projects.noTasksYet')}
+            description={t('projects.noTasksYetDesc')}
             action={{
-              label: 'Create Task',
+              label: t('projects.createTask'),
               onClick: () => setIsModalOpen(true),
             }}
           />

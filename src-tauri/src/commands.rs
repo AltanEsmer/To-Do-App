@@ -1,5 +1,6 @@
 use crate::db::DbConnection;
 use crate::services::stats_service;
+use crate::services::translation_service;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -1783,7 +1784,7 @@ fn grant_xp_internal(conn: &rusqlite::Connection, xp: i32, source: String, task_
 fn revoke_xp_internal(conn: &rusqlite::Connection, xp: i32, history_id: String) -> Result<GrantXpResult, String> {
     let progress = get_user_progress_internal(conn)?;
     
-    let previous_level = progress.current_level;
+    let _previous_level = progress.current_level;
     let new_total_xp = (progress.total_xp - xp as i64).max(0);
     let new_level = calculate_level(new_total_xp);
     let new_xp_to_next_level = calculate_xp_to_next_level(new_level);
@@ -2080,4 +2081,299 @@ pub fn get_badges(db: State<'_, Arc<Mutex<DbConnection>>>) -> Result<Vec<Badge>,
 pub fn check_and_award_badges(db: State<'_, Arc<Mutex<DbConnection>>>) -> Result<Vec<Badge>, String> {
     let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
     check_and_award_badges_internal(&db.conn)
+}
+
+// Translation data structures
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TranslatedContent {
+    pub title: String,
+    pub description: Option<String>,
+    pub source_lang: String,
+    pub target_lang: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TranslationRequest {
+    pub task_id: String,
+    pub target_lang: String, // "en" or "tr"
+}
+
+// Translation commands
+#[tauri::command]
+pub async fn translate_task_content(
+    db: State<'_, Arc<Mutex<DbConnection>>>,
+    request: TranslationRequest,
+) -> Result<TranslatedContent, String> {
+    // Get task and API key while holding the lock
+    let (task, api_key) = {
+        let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+        let task = fetch_task(&db.conn, &request.task_id)?;
+        let api_key = translation_service::get_api_key(&db.conn)?;
+        (task, api_key)
+    };
+    
+    // Detect source language (use title for detection)
+    let source_lang = translation_service::detect_language(&task.title, api_key.as_deref()).await?;
+    
+    // Translate title
+    let translated_title = {
+        // Check cache and user translation first
+        let maybe_cached = {
+            let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+            translation_service::check_cache_and_user_translation(
+                &db.conn,
+                &task.title,
+                &request.target_lang,
+                "title",
+                Some(&request.task_id),
+            )?
+        };
+        
+        if let Some(cached) = maybe_cached {
+            cached
+        } else {
+            // Detect language first (no lock needed)
+            let detected_lang = translation_service::detect_language(&task.title, api_key.as_deref()).await?;
+            
+            // Check regular cache
+            let maybe_cached = {
+                let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+                let source_text_hash = translation_service::hash_text(&task.title);
+                translation_service::get_cached_translation(
+                    &db.conn,
+                    &source_text_hash,
+                    &detected_lang,
+                    &request.target_lang,
+                    "title",
+                )?
+            };
+            
+            if let Some(cached) = maybe_cached {
+                cached
+            } else {
+                // Do async translation
+                let translated = translation_service::translate_text(
+                    &task.title,
+                    &request.target_lang,
+                    api_key.as_deref(),
+                )
+                .await?;
+                
+                // Save to cache
+                {
+                    let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+                    translation_service::save_translation(
+                        &db.conn,
+                        &task.title,
+                        &detected_lang,
+                        &request.target_lang,
+                        &translated,
+                        "title",
+                        Some(&request.task_id),
+                        false,
+                    )?;
+                }
+                
+                translated
+            }
+        }
+    };
+    
+    // Translate description if present
+    let translated_description = if let Some(desc) = &task.description {
+        if !desc.trim().is_empty() {
+            // Check cache and user translation first
+            let maybe_cached = {
+                let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+                translation_service::check_cache_and_user_translation(
+                    &db.conn,
+                    desc,
+                    &request.target_lang,
+                    "description",
+                    Some(&request.task_id),
+                )?
+            };
+            
+            if let Some(cached) = maybe_cached {
+                Some(cached)
+            } else {
+                // Detect language first (no lock needed)
+                let detected_lang = translation_service::detect_language(desc, api_key.as_deref()).await?;
+                
+                // Check regular cache
+                let maybe_cached = {
+                    let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+                    let source_text_hash = translation_service::hash_text(desc);
+                    translation_service::get_cached_translation(
+                        &db.conn,
+                        &source_text_hash,
+                        &detected_lang,
+                        &request.target_lang,
+                        "description",
+                    )?
+                };
+                
+                if let Some(cached) = maybe_cached {
+                    Some(cached)
+                } else {
+                    // Do async translation
+                    let translated = translation_service::translate_text(
+                        desc,
+                        &request.target_lang,
+                        api_key.as_deref(),
+                    )
+                    .await?;
+                    
+                    // Save to cache
+                    {
+                        let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+                        translation_service::save_translation(
+                            &db.conn,
+                            desc,
+                            &detected_lang,
+                            &request.target_lang,
+                            &translated,
+                            "description",
+                            Some(&request.task_id),
+                            false,
+                        )?;
+                    }
+                    
+                    Some(translated)
+                }
+            }
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+    
+    Ok(TranslatedContent {
+        title: translated_title,
+        description: translated_description,
+        source_lang,
+        target_lang: request.target_lang,
+    })
+}
+
+#[tauri::command]
+pub async fn save_translation_override(
+    db: State<'_, Arc<Mutex<DbConnection>>>,
+    task_id: String,
+    field: String, // "title" or "description"
+    target_lang: String,
+    translated_text: String,
+) -> Result<(), String> {
+    // Get original text and API key while holding the lock
+    let (source_text, api_key) = {
+        let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+        let task = fetch_task(&db.conn, &task_id)?;
+        let source_text = match field.as_str() {
+            "title" => task.title,
+            "description" => task.description.unwrap_or_default(),
+            _ => return Err("Invalid field type. Must be 'title' or 'description'".to_string()),
+        };
+        let api_key = translation_service::get_api_key(&db.conn)?;
+        (source_text, api_key)
+    };
+    
+    // Detect source language (release lock before await)
+    let source_lang = translation_service::detect_language(&source_text, api_key.as_deref()).await
+        .map_err(|e| format!("Failed to detect language: {}", e))?;
+    
+    // Save user-edited translation (re-lock for database write)
+    {
+        let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+        translation_service::save_translation(
+            &db.conn,
+            &source_text,
+            &source_lang,
+            &target_lang,
+            &translated_text,
+            &field,
+            Some(&task_id),
+            true, // is_user_edited
+        )?;
+    }
+    
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn get_translation(
+    db: State<'_, Arc<Mutex<DbConnection>>>,
+    task_id: String,
+    field: String, // "title" or "description"
+    target_lang: String,
+) -> Result<Option<String>, String> {
+    // Check for user-edited translation and get source text while holding the lock
+    let (source_text, api_key) = {
+        let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+        
+        // First check for user-edited translation
+        if let Ok(Some(user_trans)) = translation_service::get_user_translation(&db.conn, &task_id, &field, &target_lang) {
+            return Ok(Some(user_trans));
+        }
+        
+        // Get task to get source text
+        let task = fetch_task(&db.conn, &task_id)?;
+        let source_text = match field.as_str() {
+            "title" => task.title,
+            "description" => task.description.unwrap_or_default(),
+            _ => return Err("Invalid field type. Must be 'title' or 'description'".to_string()),
+        };
+        
+        if source_text.trim().is_empty() {
+            return Ok(None);
+        }
+        
+        let api_key = translation_service::get_api_key(&db.conn)?;
+        (source_text, api_key)
+    };
+    
+    // Detect source language (release lock before await)
+    let source_lang = translation_service::detect_language(&source_text, api_key.as_deref()).await
+        .map_err(|e| format!("Failed to detect language: {}", e))?;
+    
+    // Check cache (re-lock for database read)
+    let source_text_hash = translation_service::hash_text(&source_text);
+    let cached = {
+        let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+        translation_service::get_cached_translation(
+            &db.conn,
+            &source_text_hash,
+            &source_lang,
+            &target_lang,
+            &field,
+        )?
+    };
+    
+    // If no cache, translate on the fly
+    if cached.is_none() {
+        let translated = translation_service::translate_text(
+            &source_text,
+            &target_lang,
+            api_key.as_deref(),
+        ).await?;
+        
+        // Save to cache
+        {
+            let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+            translation_service::save_translation(
+                &db.conn,
+                &source_text,
+                &source_lang,
+                &target_lang,
+                &translated,
+                &field,
+                Some(&task_id),
+                false,
+            )?;
+        }
+        
+        Ok(Some(translated))
+    } else {
+        Ok(cached)
+    }
 }

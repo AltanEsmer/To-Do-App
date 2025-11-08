@@ -2,43 +2,44 @@ import { useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { Home, ClipboardList, CheckCircle2, Settings, BarChart3, Timer } from 'lucide-react'
 import clsx from 'clsx'
+import { useTranslation } from 'react-i18next'
 import * as tauriAdapter from '../api/tauriAdapter'
 
 interface NavItem {
   path: string
-  label: string
+  labelKey: string
   icon: React.ReactNode
 }
 
 const navItems: NavItem[] = [
   {
     path: '/',
-    label: 'Dashboard',
+    labelKey: 'nav.dashboard',
     icon: <Home className="h-5 w-5" />,
   },
   {
     path: '/projects',
-    label: 'All Tasks',
+    labelKey: 'nav.allTasks',
     icon: <ClipboardList className="h-5 w-5" />,
   },
   {
     path: '/completed',
-    label: 'Completed',
+    labelKey: 'nav.completed',
     icon: <CheckCircle2 className="h-5 w-5" />,
   },
   {
     path: '/statistics',
-    label: 'Statistics',
+    labelKey: 'nav.statistics',
     icon: <BarChart3 className="h-5 w-5" />,
   },
   {
     path: '/pomodoro',
-    label: 'Pomodoro',
+    labelKey: 'nav.pomodoro',
     icon: <Timer className="h-5 w-5" />,
   },
   {
     path: '/settings',
-    label: 'Settings',
+    labelKey: 'nav.settings',
     icon: <Settings className="h-5 w-5" />,
   },
 ]
@@ -48,6 +49,7 @@ const navItems: NavItem[] = [
  */
 export function Sidebar() {
   const location = useLocation()
+  const { t } = useTranslation()
   const [statisticsVisible, setStatisticsVisible] = useState(true)
 
   useEffect(() => {
@@ -103,7 +105,7 @@ export function Sidebar() {
               aria-current={isActive ? 'page' : undefined}
             >
               {item.icon}
-              <span>{item.label}</span>
+              <span>{t(item.labelKey)}</span>
             </Link>
           )
         })}

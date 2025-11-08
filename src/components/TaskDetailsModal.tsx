@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Bell, Edit, Upload } from 'lucide-react'
+import { Bell, Edit, Upload, Languages, ChevronDown, ChevronUp } from 'lucide-react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { Task, useTasks } from '../store/useTasks'
 import * as tauriAdapter from '../api/tauriAdapter'
@@ -10,6 +10,9 @@ import { useKeyboardShortcuts } from '../utils/useKeyboardShortcuts'
 import { EditTaskModal } from './EditTaskModal'
 import { AttachmentCard } from './ui/AttachmentCard'
 import { useToast } from './ui/use-toast'
+import { useTranslation } from 'react-i18next'
+import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
+import { Badge } from './ui/badge'
 
 interface TaskDetailsModalProps {
   task: Task | null
@@ -20,6 +23,7 @@ interface TaskDetailsModalProps {
 export function TaskDetailsModal({ task, open, onOpenChange }: TaskDetailsModalProps) {
   const { updateTask, getTaskById } = useTasks()
   const { toast } = useToast()
+  const { t } = useTranslation()
   const [attachments, setAttachments] = useState<tauriAdapter.Attachment[]>([])
   const [imageUrls, setImageUrls] = useState<Map<string, string>>(new Map())
   const [loading, setLoading] = useState(false)
@@ -29,6 +33,14 @@ export function TaskDetailsModal({ task, open, onOpenChange }: TaskDetailsModalP
   const [currentTask, setCurrentTask] = useState<Task | null>(task)
   const [isDragging, setIsDragging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  
+  // Translation state
+  const [translationExpanded, setTranslationExpanded] = useState(false)
+  const [translating, setTranslating] = useState(false)
+  const [translation, setTranslation] = useState<tauriAdapter.TranslatedContent | null>(null)
+  const [editingField, setEditingField] = useState<'title' | 'description' | null>(null)
+  const [editText, setEditText] = useState('')
+  const [targetLang, setTargetLang] = useState<'en' | 'tr'>('tr')
 
   const isImage = (attachment: tauriAdapter.Attachment): boolean => {
     // Check by MIME type
@@ -370,10 +382,243 @@ export function TaskDetailsModal({ task, open, onOpenChange }: TaskDetailsModalP
                     <div className="space-y-4">
                       {currentTask.description && (
                         <div>
-                          <h4 className="mb-2 text-sm font-medium text-foreground">Description</h4>
+                          <h4 className="mb-2 text-sm font-medium text-foreground">{t('task.description')}</h4>
                           <p className="text-sm text-muted-foreground">{currentTask.description}</p>
                         </div>
                       )}
+
+                      {/* Translation Section */}
+                      <Card className="border-border">
+                        <CardHeader className="pb-3">
+                          <div className="flex items-center justify-between">
+                            <CardTitle className="text-base flex items-center gap-2">
+                              <Languages className="h-4 w-4" />
+                              {t('translation.title')}
+                            </CardTitle>
+                            <button
+                              onClick={() => setTranslationExpanded(!translationExpanded)}
+                              className="focus-ring rounded-lg p-1 hover:bg-muted"
+                              aria-label={translationExpanded ? 'Collapse translation' : 'Expand translation'}
+                            >
+                              {translationExpanded ? (
+                                <ChevronUp className="h-4 w-4" />
+                              ) : (
+                                <ChevronDown className="h-4 w-4" />
+                              )}
+                            </button>
+                          </div>
+                        </CardHeader>
+                        {translationExpanded && (
+                          <CardContent className="space-y-4">
+                            <div className="flex items-center gap-2">
+                              <label htmlFor="target-lang" className="text-sm font-medium text-foreground">
+                                {t('translation.target')}:
+                              </label>
+                              <select
+                                id="target-lang"
+                                value={targetLang}
+                                onChange={(e) => setTargetLang(e.target.value as 'en' | 'tr')}
+                                className="focus-ring rounded-lg border border-border bg-background px-2 py-1 text-sm text-foreground"
+                              >
+                                <option value="en">English</option>
+                                <option value="tr">Türkçe</option>
+                              </select>
+                              <button
+                                onClick={async () => {
+                                  if (!currentTask) return
+                                  setTranslating(true)
+                                  try {
+                                    const translated = await tauriAdapter.translateTaskContent(
+                                      currentTask.id,
+                                      targetLang
+                                    )
+                                    setTranslation(translated)
+                                  } catch (error: any) {
+                                    toast({
+                                      title: t('translation.error'),
+                                      description: error?.message || t('translation.apiKeyMissing'),
+                                      variant: 'destructive',
+                                    })
+                                  } finally {
+                                    setTranslating(false)
+                                  }
+                                }}
+                                disabled={translating || !isTauri()}
+                                className="focus-ring flex items-center gap-2 rounded-lg bg-primary-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-primary-600 disabled:opacity-50"
+                              >
+                                <Languages className="h-4 w-4" />
+                                {translating ? t('translation.translating') : t('translation.translate')}
+                              </button>
+                            </div>
+
+                            {translation && (
+                              <div className="space-y-3">
+                                {/* Translated Title */}
+                                <div>
+                                  <div className="mb-2 flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-sm font-medium text-foreground">
+                                        Title ({t('translation.target')})
+                                      </span>
+                                      <Badge variant="outline" className="text-xs">
+                                        {translation.target_lang.toUpperCase()}
+                                      </Badge>
+                                    </div>
+                                    {editingField !== 'title' && (
+                                      <button
+                                        onClick={() => {
+                                          setEditingField('title')
+                                          setEditText(translation.title)
+                                        }}
+                                        className="focus-ring text-xs text-primary-500 hover:text-primary-600"
+                                      >
+                                        {t('translation.edit')}
+                                      </button>
+                                    )}
+                                  </div>
+                                  {editingField === 'title' ? (
+                                    <div className="space-y-2">
+                                      <textarea
+                                        value={editText}
+                                        onChange={(e) => setEditText(e.target.value)}
+                                        className="focus-ring w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
+                                        rows={2}
+                                      />
+                                      <div className="flex gap-2">
+                                        <button
+                                          onClick={async () => {
+                                            if (!currentTask) return
+                                            try {
+                                              await tauriAdapter.saveTranslationOverride(
+                                                currentTask.id,
+                                                'title',
+                                                targetLang,
+                                                editText
+                                              )
+                                              setTranslation({ ...translation, title: editText })
+                                              setEditingField(null)
+                                              toast({
+                                                title: t('translation.save'),
+                                                description: 'Translation saved',
+                                                variant: 'default',
+                                              })
+                                            } catch (error: any) {
+                                              toast({
+                                                title: t('translation.error'),
+                                                description: error?.message || 'Failed to save translation',
+                                                variant: 'destructive',
+                                              })
+                                            }
+                                          }}
+                                          className="focus-ring rounded-lg bg-primary-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-600"
+                                        >
+                                          {t('translation.save')}
+                                        </button>
+                                        <button
+                                          onClick={() => {
+                                            setEditingField(null)
+                                            setEditText('')
+                                          }}
+                                          className="focus-ring rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
+                                        >
+                                          {t('translation.cancel')}
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <p className="text-sm text-muted-foreground">{translation.title}</p>
+                                  )}
+                                </div>
+
+                                {/* Translated Description */}
+                                {translation.description && (
+                                  <div>
+                                    <div className="mb-2 flex items-center justify-between">
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-sm font-medium text-foreground">
+                                          {t('task.description')} ({t('translation.target')})
+                                        </span>
+                                        <Badge variant="outline" className="text-xs">
+                                          {translation.target_lang.toUpperCase()}
+                                        </Badge>
+                                      </div>
+                                      {editingField !== 'description' && (
+                                        <button
+                                          onClick={() => {
+                                            setEditingField('description')
+                                            setEditText(translation.description || '')
+                                          }}
+                                          className="focus-ring text-xs text-primary-500 hover:text-primary-600"
+                                        >
+                                          {t('translation.edit')}
+                                        </button>
+                                      )}
+                                    </div>
+                                    {editingField === 'description' ? (
+                                      <div className="space-y-2">
+                                        <textarea
+                                          value={editText}
+                                          onChange={(e) => setEditText(e.target.value)}
+                                          className="focus-ring w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
+                                          rows={4}
+                                        />
+                                        <div className="flex gap-2">
+                                          <button
+                                            onClick={async () => {
+                                              if (!currentTask) return
+                                              try {
+                                                await tauriAdapter.saveTranslationOverride(
+                                                  currentTask.id,
+                                                  'description',
+                                                  targetLang,
+                                                  editText
+                                                )
+                                                setTranslation({ ...translation, description: editText })
+                                                setEditingField(null)
+                                                toast({
+                                                  title: t('translation.save'),
+                                                  description: 'Translation saved',
+                                                  variant: 'default',
+                                                })
+                                              } catch (error: any) {
+                                                toast({
+                                                  title: t('translation.error'),
+                                                  description: error?.message || 'Failed to save translation',
+                                                  variant: 'destructive',
+                                                })
+                                              }
+                                            }}
+                                            className="focus-ring rounded-lg bg-primary-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-600"
+                                          >
+                                            {t('translation.save')}
+                                          </button>
+                                          <button
+                                            onClick={() => {
+                                              setEditingField(null)
+                                              setEditText('')
+                                            }}
+                                            className="focus-ring rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
+                                          >
+                                            {t('translation.cancel')}
+                                          </button>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <p className="text-sm text-muted-foreground">{translation.description}</p>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {!translation && !translating && (
+                              <p className="text-sm text-muted-foreground text-center py-4">
+                                {t('translation.noTranslation')}
+                              </p>
+                            )}
+                          </CardContent>
+                        )}
+                      </Card>
 
                       {currentTask.dueDate && (
                         <div>

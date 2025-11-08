@@ -12,7 +12,12 @@ A modern desktop todo application built with React + TypeScript frontend and Tau
 - **Task Properties**: Title, description, due date, priority (low/medium/high), completion status
 - **Task Organization**: Projects/categories for grouping tasks
 - **Subtasks**: Nested subtasks support for breaking down tasks
-- **File Attachments**: Attach files to tasks with file picker dialog
+- **Multi-Type File Attachments**: Attach images, PDFs, and text files to tasks
+  - Supported formats: Images (PNG, JPG, JPEG, GIF, WEBP), PDF, Text (TXT, MD)
+  - File picker dialog with file type filtering
+  - Optional drag-and-drop support
+  - File size tracking and validation
+  - Background image selection for task cards
 
 ### User Interface
 - **Modern UI**: Clean, professional design with smooth animations (Framer Motion)
@@ -21,6 +26,8 @@ A modern desktop todo application built with React + TypeScript frontend and Tau
 - **Modal Dialogs**: 
   - Add Task Modal (centered, properly sized)
   - Task Details Modal (centered, with attachments section)
+  - Attachment preview dialogs for PDFs and text files
+  - Text file preview with truncation for large files (>50KB)
 - **Accessibility**: Keyboard navigation, ARIA labels, focus management
 
 ### Pages & Views
@@ -207,6 +214,34 @@ A modern desktop todo application built with React + TypeScript frontend and Tau
   - Used Framer Motion's `x` and `y` transforms for proper centering
   - Reduced modal width to 28rem (Add Task) and 32rem (Task Details) for better UX
 
+### Multi-Type Attachments Implementation
+- **Problem**: Attachments only supported images, needed support for PDFs and text files
+- **Solution**: 
+  - Extended file type validation to support images, PDFs, and text files
+  - Added MIME type detection and validation
+  - Created AttachmentCard component with type-specific previews
+  - Implemented PDF and text file preview dialogs
+  - Added file size tracking in database
+  - Created Rust command for opening files with system default application
+  - Added download functionality for attachments
+
+### Background Image Feature
+- **Problem**: Users wanted to see attached images as background on task cards
+- **Solution**: 
+  - Added background image display to TaskCard component
+  - Implemented image selection mechanism (first image or user-selected)
+  - Added opacity overlay for text readability
+  - Automatic refresh when background image is deleted or changed
+  - Background selection UI in TaskDetailsModal
+
+### Database Migration Issues
+- **Problem**: Size column missing in attachments table causing errors
+- **Solution**: 
+  - Added migration 0008 to add size column
+  - Implemented safety check to ensure column exists even if migration fails
+  - Updated all SQL queries to include size field
+  - Updated fallback table creation to include size column
+
 ---
 
 ## 📁 Project Structure
@@ -223,13 +258,14 @@ To-Do-App/
 │   │   │   ├── dialog.tsx        # Dialog component
 │   │   │   ├── card.tsx          # Card component
 │   │   │   ├── badge.tsx          # Badge component
+│   │   │   ├── AttachmentCard.tsx # Attachment display component
 │   │   │   ├── XPBar.tsx          # XP progress bar
 │   │   │   ├── XpToast.tsx        # XP toast hook
 │   │   │   ├── LevelUpDialog.tsx  # Level-up celebration dialog
 │   │   │   └── ProgressPanel.tsx # Progress stats panel
 │   │   ├── AddTaskModal.tsx      # Add task dialog
 │   │   ├── TaskDetailsModal.tsx  # Task details with attachments
-│   │   ├── TaskCard.tsx          # Task display component
+│   │   ├── TaskCard.tsx          # Task display component with background image support
 │   │   ├── TemplatesModal.tsx    # Task templates management
 │   │   ├── Header.tsx            # App header with XP bar
 │   │   ├── Sidebar.tsx           # Navigation sidebar
@@ -262,9 +298,9 @@ To-Do-App/
 │   ├── src/
 │   │   ├── main.rs               # Tauri setup, tray, handlers
 │   │   ├── db.rs                 # Database connection & migrations
-│   │   ├── commands.rs           # All Tauri commands (tasks, projects, etc.)
+│   │   ├── commands.rs           # All Tauri commands (tasks, projects, attachments, etc.)
 │   │   ├── notifications.rs      # Notification scheduling
-│   │   └── attachments.rs       # File attachment handling
+│   │   └── attachments.rs       # File attachment utilities (validation, MIME detection)
 │   ├── migrations/               # SQL migration files
 │   └── icons/                    # App icons
 │
@@ -281,7 +317,14 @@ To-Do-App/
 - All task operations (create, read, update, delete, toggle complete)
 - Project management
 - Subtasks
-- File attachments
+- Multi-type file attachments (images, PDFs, text files)
+  - File type validation (frontend and backend)
+  - File size tracking
+  - Preview functionality (images, PDFs, text)
+  - Download attachments
+  - Delete attachments with confirmation
+  - Background image selection for task cards
+  - Automatic background refresh on deletion
 - System tray integration
 - System notifications
 - Backup/restore functionality
@@ -304,12 +347,15 @@ To-Do-App/
 - **Gamification Backend**: XP system is frontend-only; backend persistence and API integration pending
 - **Streaks**: Streak tracking is stored but not yet calculated/updated
 - **Badges**: Badge system schema exists but not yet implemented
+- **Drag-and-Drop Attachments**: File input works; full drag-and-drop support pending (currently shows helpful message)
 
 ### 🔄 Development Status
 - **Environment**: Fully functional in Tauri desktop mode
 - **Browser Mode**: Limited functionality (shows helpful error messages)
 - **Build**: Production builds working
 - **Database**: SQLite with automatic migrations
+  - Attachments table with size column (migration 0008)
+  - File metadata tracking (filename, path, MIME type, size, created_at)
 - **State Management**: Zustand stores syncing with backend
 
 ---
@@ -333,6 +379,11 @@ To-Do-App/
 14. **Pomodoro Sounds**: Audio notifications for timer start/end events
 15. **Statistics Enhancements**: More detailed analytics, custom date ranges, comparison views
 16. **Template Categories**: Organize templates into categories for better management
+17. **Attachment Improvements**: 
+    - Full drag-and-drop file upload support
+    - Image editing/cropping capabilities
+    - Attachment versioning
+    - Cloud storage integration
 
 ---
 
@@ -393,4 +444,20 @@ npm run test
 **Last Updated**: Current session
 **Version**: 0.1.0
 **Status**: ✅ Fully Functional
+
+## 🆕 Recent Updates
+
+### Multi-Type Attachments (Latest)
+- ✅ Extended attachment support to images, PDFs, and text files
+- ✅ File type validation on both frontend and backend
+- ✅ File size tracking in database
+- ✅ AttachmentCard component with type-specific previews
+- ✅ PDF and text file preview dialogs
+- ✅ Download functionality for all attachment types
+- ✅ Background image feature for task cards
+- ✅ Image selection for background display
+- ✅ Automatic background refresh on attachment deletion
+- ✅ Cross-platform file opening using system default applications
+- ✅ Toast notifications for all attachment operations
+- ✅ Tests: Rust tests for file validation, TypeScript tests for attachment handling
 

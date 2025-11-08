@@ -17,6 +17,7 @@ import {
   ResponsiveContainer,
 } from 'recharts'
 import { BarChart3, Download, TrendingUp, CheckCircle2, Calendar, Clock } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import * as tauriAdapter from '../api/tauriAdapter'
 import { useTasks } from '../store/useTasks'
 import { isTauri } from '../utils/tauri'
@@ -60,6 +61,7 @@ const COLORS = {
 const PRIORITY_COLORS = ['#ef4444', '#f59e0b', '#10b981']
 
 export function Statistics() {
+  const { t } = useTranslation()
   const { tasks } = useTasks()
   const [dateRange, setDateRange] = useState<DateRange>('30')
   const [loading, setLoading] = useState(true)
@@ -149,7 +151,7 @@ export function Statistics() {
 
   const handleExport = async () => {
     if (!isTauri()) {
-      alert('Export is only available in Tauri desktop app.')
+      alert(t('statistics.exportOnlyTauri'))
       return
     }
 
@@ -185,11 +187,11 @@ export function Statistics() {
 
       if (savedPath) {
         await writeTextFile(savedPath, JSON.stringify(statsData, null, 2))
-        alert('Statistics exported successfully!')
+        alert(t('statistics.exportSuccess'))
       }
     } catch (error) {
       console.error('Failed to export statistics:', error)
-      alert('Failed to export statistics')
+      alert(t('statistics.exportFailed'))
     }
   }
 
@@ -198,7 +200,7 @@ export function Statistics() {
       <div className="flex h-full items-center justify-center">
         <div className="text-center">
           <div className="mb-4 inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-primary-500 border-r-transparent"></div>
-          <p className="text-muted-foreground">Loading statistics...</p>
+          <p className="text-muted-foreground">{t('statistics.loading')}</p>
         </div>
       </div>
     )
@@ -208,8 +210,8 @@ export function Statistics() {
     <div className="flex h-full flex-col">
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-foreground">Statistics</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Your productivity insights</p>
+          <h2 className="text-2xl font-bold text-foreground">{t('statistics.title')}</h2>
+          <p className="mt-1 text-sm text-muted-foreground">{t('statistics.subtitle')}</p>
         </div>
         <div className="flex gap-3">
           <select
@@ -217,17 +219,17 @@ export function Statistics() {
             onChange={(e) => setDateRange(e.target.value as DateRange)}
             className="focus-ring rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
           >
-            <option value="7">Last 7 days</option>
-            <option value="30">Last 30 days</option>
-            <option value="90">Last 90 days</option>
-            <option value="all">All time</option>
+            <option value="7">{t('statistics.dateRange.7')}</option>
+            <option value="30">{t('statistics.dateRange.30')}</option>
+            <option value="90">{t('statistics.dateRange.90')}</option>
+            <option value="all">{t('statistics.dateRange.all')}</option>
           </select>
           <button
             onClick={handleExport}
             className="focus-ring flex items-center gap-2 rounded-lg bg-primary-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-600"
           >
             <Download className="h-4 w-4" />
-            Export
+            {t('statistics.export')}
           </button>
         </div>
       </div>
@@ -238,7 +240,7 @@ export function Statistics() {
           <div className="rounded-xl border border-border bg-card p-4">
             <div className="flex items-center gap-2 text-muted-foreground">
               <BarChart3 className="h-5 w-5" />
-              <p className="text-sm font-medium">Total Tasks</p>
+              <p className="text-sm font-medium">{t('statistics.totalTasks')}</p>
             </div>
             <p className="mt-2 text-2xl font-bold text-foreground">{totalTasks}</p>
           </div>
@@ -246,7 +248,7 @@ export function Statistics() {
           <div className="rounded-xl border border-border bg-card p-4">
             <div className="flex items-center gap-2 text-muted-foreground">
               <TrendingUp className="h-5 w-5" />
-              <p className="text-sm font-medium">Completion Rate</p>
+              <p className="text-sm font-medium">{t('statistics.completionRate')}</p>
             </div>
             <p className="mt-2 text-2xl font-bold text-foreground">{completionRate.toFixed(1)}%</p>
           </div>
@@ -254,31 +256,31 @@ export function Statistics() {
           <div className="rounded-xl border border-border bg-card p-4">
             <div className="flex items-center gap-2 text-muted-foreground">
               <CheckCircle2 className="h-5 w-5" />
-              <p className="text-sm font-medium">Today</p>
+              <p className="text-sm font-medium">{t('statistics.today')}</p>
             </div>
             <p className="mt-2 text-2xl font-bold text-foreground">{tasksCompletedToday}</p>
-            <p className="mt-1 text-xs text-muted-foreground">This week: {tasksCompletedThisWeek}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{t('statistics.thisWeek')}: {tasksCompletedThisWeek}</p>
           </div>
 
           <div className="rounded-xl border border-border bg-card p-4">
             <div className="flex items-center gap-2 text-muted-foreground">
               <Calendar className="h-5 w-5" />
-              <p className="text-sm font-medium">This Month</p>
+              <p className="text-sm font-medium">{t('statistics.thisMonth')}</p>
             </div>
             <p className="mt-2 text-2xl font-bold text-foreground">{tasksCompletedThisMonth}</p>
-            <p className="mt-1 text-xs text-muted-foreground">Avg/day: {averageTasksPerDay.toFixed(1)}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{t('statistics.avgPerDay')}: {averageTasksPerDay.toFixed(1)}</p>
           </div>
 
           <div className="rounded-xl border border-border bg-card p-4">
             <div className="flex items-center gap-2 text-muted-foreground">
               <Clock className="h-5 w-5" />
-              <p className="text-sm font-medium">Most Productive</p>
+              <p className="text-sm font-medium">{t('statistics.mostProductive')}</p>
             </div>
             <p className="mt-2 text-lg font-bold text-foreground">
-              {mostProductiveDay?.day_of_week || 'N/A'}
+              {mostProductiveDay?.day_of_week || t('statistics.noData')}
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
-              {mostProductiveDay ? `${mostProductiveDay.count} tasks` : 'No data'}
+              {mostProductiveDay ? `${mostProductiveDay.count} ${t('statistics.tasks')}` : t('statistics.noData')}
             </p>
           </div>
         </div>
@@ -287,7 +289,7 @@ export function Statistics() {
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           {/* Tasks Completed Over Time - Line Chart */}
           <div className="rounded-xl border border-border bg-card p-6">
-            <h3 className="mb-4 text-lg font-semibold text-foreground">Tasks Completed Over Time</h3>
+            <h3 className="mb-4 text-lg font-semibold text-foreground">{t('statistics.tasksCompletedOverTime')}</h3>
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={completionStats}>
                 <CartesianGrid strokeDasharray="3 3" />
@@ -295,14 +297,14 @@ export function Statistics() {
                 <YAxis />
                 <Tooltip />
                 <Legend />
-                <Line type="monotone" dataKey="count" stroke="#3b82f6" strokeWidth={2} name="Completed" />
+                <Line type="monotone" dataKey="count" stroke="#3b82f6" strokeWidth={2} name={t('statistics.completedLabel')} />
               </LineChart>
             </ResponsiveContainer>
           </div>
 
           {/* Priority Distribution - Pie Chart */}
           <div className="rounded-xl border border-border bg-card p-6">
-            <h3 className="mb-4 text-lg font-semibold text-foreground">Priority Distribution</h3>
+            <h3 className="mb-4 text-lg font-semibold text-foreground">{t('statistics.priorityDistribution')}</h3>
             <ResponsiveContainer width="100%" height={300}>
               <PieChart>
                 <Pie
@@ -326,7 +328,7 @@ export function Statistics() {
 
           {/* Tasks by Project - Bar Chart */}
           <div className="rounded-xl border border-border bg-card p-6">
-            <h3 className="mb-4 text-lg font-semibold text-foreground">Tasks by Project</h3>
+            <h3 className="mb-4 text-lg font-semibold text-foreground">{t('statistics.tasksByProject')}</h3>
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={projectStats}>
                 <CartesianGrid strokeDasharray="3 3" />
@@ -334,15 +336,15 @@ export function Statistics() {
                 <YAxis />
                 <Tooltip />
                 <Legend />
-                <Bar dataKey="total_tasks" fill="#3b82f6" name="Total Tasks" />
-                <Bar dataKey="completed_tasks" fill="#10b981" name="Completed" />
+                <Bar dataKey="total_tasks" fill="#3b82f6" name={t('statistics.totalTasksLabel')} />
+                <Bar dataKey="completed_tasks" fill="#10b981" name={t('statistics.completedLabel')} />
               </BarChart>
             </ResponsiveContainer>
           </div>
 
           {/* Productivity Trend - Area Chart */}
           <div className="rounded-xl border border-border bg-card p-6">
-            <h3 className="mb-4 text-lg font-semibold text-foreground">Productivity Trend</h3>
+            <h3 className="mb-4 text-lg font-semibold text-foreground">{t('statistics.productivityTrend')}</h3>
             <ResponsiveContainer width="100%" height={300}>
               <AreaChart data={productivityTrend}>
                 <CartesianGrid strokeDasharray="3 3" />
@@ -356,7 +358,7 @@ export function Statistics() {
                   stroke="#3b82f6"
                   fill="#3b82f6"
                   fillOpacity={0.6}
-                  name="Completion Rate %"
+                  name={t('statistics.completionRatePercent')}
                 />
               </AreaChart>
             </ResponsiveContainer>
@@ -365,23 +367,23 @@ export function Statistics() {
 
         {/* Additional Stats */}
         <div className="rounded-xl border border-border bg-card p-6">
-          <h3 className="mb-4 text-lg font-semibold text-foreground">Additional Statistics</h3>
+          <h3 className="mb-4 text-lg font-semibold text-foreground">{t('statistics.additionalStats')}</h3>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
-              <p className="text-sm text-muted-foreground">Average Completion Time</p>
+              <p className="text-sm text-muted-foreground">{t('statistics.avgCompletionTime')}</p>
               <p className="mt-1 text-xl font-bold text-foreground">
                 {averageCompletionTime.toFixed(1)} days
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
-                Average time from task creation to completion
+                {t('statistics.avgCompletionTimeDesc')}
               </p>
             </div>
             {mostProductiveDay && (
               <div>
-                <p className="text-sm text-muted-foreground">Most Productive Day</p>
+                <p className="text-sm text-muted-foreground">{t('statistics.mostProductiveDay')}</p>
                 <p className="mt-1 text-xl font-bold text-foreground">{mostProductiveDay.day_of_week}</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {mostProductiveDay.count} tasks completed on this day
+                  {t('statistics.mostProductiveDayDesc', { count: mostProductiveDay.count })}
                 </p>
               </div>
             )}

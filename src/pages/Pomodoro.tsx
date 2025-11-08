@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useTimer } from '../store/useTimer'
 import { useTasks } from '../store/useTasks'
 import { Timer } from '../components/timer/Timer'
@@ -16,6 +17,7 @@ import { Target, CheckCircle2 } from 'lucide-react'
  * Pomodoro timer page with task integration
  */
 export function Pomodoro() {
+  const { t } = useTranslation()
   const { activeTaskId, setActiveTask, mode, status, cycles, loadSettings } = useTimer()
   const { tasks, toggleComplete } = useTasks()
   const [completionDialogOpen, setCompletionDialogOpen] = useState(false)
@@ -70,8 +72,8 @@ export function Pomodoro() {
   return (
     <div className="flex h-full flex-col">
       <div className="mb-6">
-        <h2 className="text-2xl font-bold text-foreground">Pomodoro Timer</h2>
-        <p className="mt-1 text-sm text-muted-foreground">Focus on your tasks with timed work sessions</p>
+        <h2 className="text-2xl font-bold text-foreground">{t('pomodoro.title')}</h2>
+        <p className="mt-1 text-sm text-muted-foreground">{t('pomodoro.subtitle')}</p>
       </div>
 
       <div className="flex flex-1 flex-col items-center justify-center space-y-8">
@@ -84,7 +86,7 @@ export function Pomodoro() {
         <div className="w-full max-w-2xl space-y-4">
           <div>
             <label htmlFor="task-select" className="mb-2 block text-sm font-medium text-foreground">
-              Select a task to focus on
+              {t('pomodoro.selectTask')}
             </label>
             <select
               id="task-select"
@@ -93,7 +95,7 @@ export function Pomodoro() {
               className="focus-ring w-full rounded-lg border border-border bg-background px-4 py-2 text-sm text-foreground"
               disabled={status === 'running'}
             >
-              <option value="">-- No task selected --</option>
+              <option value="">{t('pomodoro.noTaskSelected')}</option>
               {incompleteTasks.map((task) => (
                 <option key={task.id} value={task.id}>
                   {task.title}
@@ -108,7 +110,7 @@ export function Pomodoro() {
               <div className="flex items-center gap-3">
                 <Target className="h-5 w-5 text-primary-500" />
                 <div className="flex-1">
-                  <p className="text-sm font-medium text-foreground">Focusing on:</p>
+                  <p className="text-sm font-medium text-foreground">{t('pomodoro.focusingOn')}</p>
                   <p className="text-lg font-semibold text-primary-600 dark:text-primary-400">
                     {activeTask.title}
                   </p>
@@ -119,7 +121,7 @@ export function Pomodoro() {
 
           {/* Cycle Counter */}
           <div className="text-center text-sm text-muted-foreground">
-            Completed Pomodoros: {cycles}
+            {t('pomodoro.completedPomodoros')}: {cycles}
           </div>
         </div>
       </div>
@@ -128,9 +130,11 @@ export function Pomodoro() {
       <Dialog open={completionDialogOpen} onOpenChange={setCompletionDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Pomodoro Complete!</DialogTitle>
+            <DialogTitle>{t('pomodoro.complete')}</DialogTitle>
             <DialogDescription>
-              Did you complete {activeTask?.title || 'your task'}?
+              {activeTask?.title 
+                ? t('pomodoro.completeDesc', { taskTitle: activeTask.title })
+                : t('pomodoro.completeDescNoTask')}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -138,14 +142,14 @@ export function Pomodoro() {
               onClick={handleSkipCompletion}
               className="focus-ring rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
             >
-              Not Yet
+              {t('pomodoro.notYet')}
             </button>
             <button
               onClick={handleCompleteTask}
               className="focus-ring flex items-center gap-2 rounded-lg bg-primary-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-600"
             >
               <CheckCircle2 className="h-4 w-4" />
-              Yes, Complete Task
+              {t('pomodoro.yesComplete')}
             </button>
           </DialogFooter>
         </DialogContent>

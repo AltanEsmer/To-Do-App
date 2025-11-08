@@ -185,16 +185,39 @@ fn run_migrations(conn: &Connection, app_handle: &tauri::AppHandle) -> anyhow::R
         }
     }
     
-    // Ensure size column exists in attachments table even if migration wasn't found/applied
+    // Ensure attachments table exists and size column exists even if migration wasn't found/applied
     // This is a safety check to handle cases where migration system fails
     {
-        let columns: Vec<String> = conn
-            .prepare("SELECT name FROM pragma_table_info('attachments')")?
-            .query_map([], |row| Ok(row.get::<_, String>(0)?))?
-            .collect::<SqlResult<Vec<String>>>()?;
+        let attachments_table_exists: bool = conn.query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='attachments'",
+            [],
+            |row| Ok(row.get::<_, i64>(0)? > 0),
+        )?;
         
-        if !columns.contains(&"size".to_string()) {
-            conn.execute("ALTER TABLE attachments ADD COLUMN size INTEGER", [])?;
+        if attachments_table_exists {
+            let columns: Vec<String> = conn
+                .prepare("SELECT name FROM pragma_table_info('attachments')")?
+                .query_map([], |row| Ok(row.get::<_, String>(0)?))?
+                .collect::<SqlResult<Vec<String>>>()?;
+            
+            if !columns.contains(&"size".to_string()) {
+                conn.execute("ALTER TABLE attachments ADD COLUMN size INTEGER", [])?;
+            }
+        } else {
+            // Create attachments table if it doesn't exist
+            conn.execute_batch(
+                "CREATE TABLE IF NOT EXISTS attachments (
+                    id TEXT PRIMARY KEY,
+                    task_id TEXT NOT NULL,
+                    filename TEXT NOT NULL,
+                    path TEXT NOT NULL,
+                    mime TEXT,
+                    size INTEGER,
+                    created_at INTEGER NOT NULL,
+                    FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+                );
+                CREATE INDEX IF NOT EXISTS idx_attachments_task_id ON attachments(task_id);"
+            )?;
         }
     }
     

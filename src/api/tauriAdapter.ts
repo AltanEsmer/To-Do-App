@@ -551,3 +551,61 @@ export async function getBadges(): Promise<Badge[]> {
 export async function checkAndAwardBadges(): Promise<Badge[]> {
   return safeInvoke<Badge[]>('check_and_award_badges', undefined, () => Promise.resolve([]))
 }
+
+// Translation types
+export interface TranslatedContent {
+  title: string
+  description?: string
+  source_lang: string
+  target_lang: string
+}
+
+// Translation commands
+export async function translateTaskContent(
+  taskId: string,
+  targetLang: 'en' | 'tr'
+): Promise<TranslatedContent> {
+  return safeInvoke<TranslatedContent>(
+    'translate_task_content',
+    { request: { task_id: taskId, target_lang: targetLang } },
+    () => {
+      throw new Error('Translation is only available in Tauri desktop app')
+    }
+  )
+}
+
+export async function saveTranslationOverride(
+  taskId: string,
+  field: 'title' | 'description',
+  targetLang: 'en' | 'tr',
+  translatedText: string
+): Promise<void> {
+  return safeInvoke<void>(
+    'save_translation_override',
+    {
+      task_id: taskId,
+      field,
+      target_lang: targetLang,
+      translated_text: translatedText,
+    },
+    () => {
+      throw new Error('Translation is only available in Tauri desktop app')
+    }
+  )
+}
+
+export async function getTranslation(
+  taskId: string,
+  field: 'title' | 'description',
+  targetLang: 'en' | 'tr'
+): Promise<string | null> {
+  return safeInvoke<string | null>(
+    'get_translation',
+    {
+      task_id: taskId,
+      field,
+      target_lang: targetLang,
+    },
+    () => Promise.resolve(null)
+  )
+}

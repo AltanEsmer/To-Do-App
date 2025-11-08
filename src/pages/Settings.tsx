@@ -3,8 +3,10 @@ import * as tauriAdapter from '../api/tauriAdapter'
 import { isTauri } from '../utils/tauri'
 import { TemplatesModal } from '../components/TemplatesModal'
 import { useTimer } from '../store/useTimer'
+import { useTranslation } from 'react-i18next'
 
 export function Settings() {
+  const { t, i18n } = useTranslation()
   const [notificationsEnabled, setNotificationsEnabled] = useState(false)
   const [autostartEnabled, setAutostartEnabled] = useState(false)
   const [statisticsVisible, setStatisticsVisible] = useState(true)
@@ -14,6 +16,8 @@ export function Settings() {
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [isTemplatesOpen, setIsTemplatesOpen] = useState(false)
+  const [currentLanguage, setCurrentLanguage] = useState<string>('en')
+  const [apiKey, setApiKey] = useState<string>('')
   const { settings: timerSettings, updateSettings: updateTimerSettings, loadSettings: loadTimerSettings } = useTimer()
   
   // Local state for pomodoro inputs to allow empty values
@@ -51,6 +55,15 @@ export function Settings() {
       const defaultReminder = settings.default_reminder_minutes
       setDefaultReminderMinutes(defaultReminder ? parseInt(defaultReminder) : null)
       setDefaultNotificationRepeat(settings.default_notification_repeat === 'true')
+      
+      // Load language setting
+      const savedLanguage = settings.app_language || i18n.language || 'en'
+      setCurrentLanguage(savedLanguage)
+      i18n.changeLanguage(savedLanguage)
+      
+      // Load API key (masked for display)
+      const savedApiKey = settings.google_translate_api_key || ''
+      setApiKey(savedApiKey ? '•'.repeat(20) : '') // Show masked if exists
     } catch (error) {
       console.error('Failed to load settings:', error)
     }
@@ -575,6 +588,71 @@ export function Settings() {
             <p className="text-xs text-muted-foreground">
               Export your tasks, projects, and settings to a JSON file. Import will merge or replace existing data.
             </p>
+          </div>
+        </div>
+
+        {/* Language Settings */}
+        <div className="rounded-xl border border-border bg-card p-6">
+          <h3 className="mb-4 text-lg font-semibold text-foreground">{t('settings.language')}</h3>
+          <div className="space-y-3">
+            <div>
+              <label htmlFor="language-select" className="mb-1 block text-sm font-medium text-foreground">
+                {t('settings.language')}
+              </label>
+              <select
+                id="language-select"
+                value={currentLanguage}
+                onChange={async (e) => {
+                  const newLang = e.target.value
+                  setCurrentLanguage(newLang)
+                  i18n.changeLanguage(newLang)
+                  try {
+                    await tauriAdapter.updateSettings('app_language', newLang)
+                    showMessage('success', 'Language setting saved')
+                  } catch (error) {
+                    showMessage('error', 'Failed to save language setting')
+                  }
+                }}
+                className="focus-ring w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
+              >
+                <option value="en">{t('settings.language.en')}</option>
+                <option value="tr">{t('settings.language.tr')}</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Translation API Key */}
+        <div className="rounded-xl border border-border bg-card p-6">
+          <h3 className="mb-4 text-lg font-semibold text-foreground">{t('settings.apiKey')}</h3>
+          <div className="space-y-3">
+            <p className="text-xs text-muted-foreground">
+              {t('settings.apiKey.warning')}
+            </p>
+            <div>
+              <label htmlFor="api-key-input" className="mb-1 block text-sm font-medium text-foreground">
+                {t('settings.apiKey')}
+              </label>
+              <input
+                id="api-key-input"
+                type="password"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                onBlur={async () => {
+                  if (apiKey && !apiKey.startsWith('•')) {
+                    try {
+                      await tauriAdapter.updateSettings('google_translate_api_key', apiKey)
+                      setApiKey('•'.repeat(20))
+                      showMessage('success', 'API key saved')
+                    } catch (error) {
+                      showMessage('error', 'Failed to save API key')
+                    }
+                  }
+                }}
+                placeholder={t('settings.apiKey.placeholder')}
+                className="focus-ring w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
+              />
+            </div>
           </div>
         </div>
 
