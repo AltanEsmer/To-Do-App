@@ -123,6 +123,16 @@ fn run_migrations(conn: &Connection, app_handle: &tauri::AppHandle) -> anyhow::R
                         if !has_recurrence_parent_id {
                             tx.execute("ALTER TABLE tasks ADD COLUMN recurrence_parent_id TEXT", [])?;
                         }
+                    } else if migration_file == "0008_add_attachment_size.sql" {
+                        // Check if size column already exists in attachments table
+                        let columns: Vec<String> = tx
+                            .prepare("SELECT name FROM pragma_table_info('attachments')")?
+                            .query_map([], |row| Ok(row.get::<_, String>(0)?))?
+                            .collect::<SqlResult<Vec<String>>>()?;
+                        
+                        if !columns.contains(&"size".to_string()) {
+                            tx.execute("ALTER TABLE attachments ADD COLUMN size INTEGER", [])?;
+                        }
                     } else if migration_file == "0006_add_notification_preferences.sql" {
                         // Check if notification columns already exist
                         let columns: Vec<String> = tx
@@ -172,6 +182,19 @@ fn run_migrations(conn: &Connection, app_handle: &tauri::AppHandle) -> anyhow::R
                     tx.commit()?;
                 }
             }
+        }
+    }
+    
+    // Ensure size column exists in attachments table even if migration wasn't found/applied
+    // This is a safety check to handle cases where migration system fails
+    {
+        let columns: Vec<String> = conn
+            .prepare("SELECT name FROM pragma_table_info('attachments')")?
+            .query_map([], |row| Ok(row.get::<_, String>(0)?))?
+            .collect::<SqlResult<Vec<String>>>()?;
+        
+        if !columns.contains(&"size".to_string()) {
+            conn.execute("ALTER TABLE attachments ADD COLUMN size INTEGER", [])?;
         }
     }
     
@@ -351,6 +374,7 @@ fn run_migrations(conn: &Connection, app_handle: &tauri::AppHandle) -> anyhow::R
                 filename TEXT NOT NULL,
                 path TEXT NOT NULL,
                 mime TEXT,
+                size INTEGER,
                 created_at INTEGER NOT NULL,
                 FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
             );
@@ -501,6 +525,7 @@ mod tests {
                 filename TEXT NOT NULL,
                 path TEXT NOT NULL,
                 mime TEXT,
+                size INTEGER,
                 created_at INTEGER NOT NULL,
                 FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
             );"

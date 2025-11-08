@@ -52,3 +52,87 @@ pub fn copy_attachment_to_storage(
     Ok(relative_path)
 }
 
+pub fn validate_file_type(file_path: &str) -> Result<(), String> {
+    let path = PathBuf::from(file_path);
+    let extension = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_lowercase());
+    
+    let ext = extension.as_deref().unwrap_or("");
+    
+    // Allowed extensions: images, PDF, text
+    let allowed_extensions = [
+        // Images
+        "png", "jpg", "jpeg", "gif", "webp",
+        // PDF
+        "pdf",
+        // Text
+        "txt", "md",
+    ];
+    
+    if allowed_extensions.contains(&ext) {
+        Ok(())
+    } else {
+        Err(format!(
+            "File type not allowed. Allowed types: images (png, jpg, jpeg, gif, webp), PDF, text (txt, md), PDF"
+        ))
+    }
+}
+
+pub fn get_mime_type(file_path: &str) -> Option<String> {
+    let path = PathBuf::from(file_path);
+    let extension = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_lowercase());
+    
+    match extension.as_deref() {
+        Some("png") => Some("image/png".to_string()),
+        Some("jpg") | Some("jpeg") => Some("image/jpeg".to_string()),
+        Some("gif") => Some("image/gif".to_string()),
+        Some("webp") => Some("image/webp".to_string()),
+        Some("pdf") => Some("application/pdf".to_string()),
+        Some("txt") => Some("text/plain".to_string()),
+        Some("md") => Some("text/markdown".to_string()),
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_validate_file_type() {
+        // Valid file types
+        assert!(validate_file_type("test.png").is_ok());
+        assert!(validate_file_type("test.jpg").is_ok());
+        assert!(validate_file_type("test.jpeg").is_ok());
+        assert!(validate_file_type("test.gif").is_ok());
+        assert!(validate_file_type("test.webp").is_ok());
+        assert!(validate_file_type("test.pdf").is_ok());
+        assert!(validate_file_type("test.txt").is_ok());
+        assert!(validate_file_type("test.md").is_ok());
+
+        // Invalid file types
+        assert!(validate_file_type("test.exe").is_err());
+        assert!(validate_file_type("test.zip").is_err());
+        assert!(validate_file_type("test").is_err());
+    }
+
+    #[test]
+    fn test_get_mime_type() {
+        assert_eq!(get_mime_type("test.png"), Some("image/png".to_string()));
+        assert_eq!(get_mime_type("test.jpg"), Some("image/jpeg".to_string()));
+        assert_eq!(get_mime_type("test.jpeg"), Some("image/jpeg".to_string()));
+        assert_eq!(get_mime_type("test.gif"), Some("image/gif".to_string()));
+        assert_eq!(get_mime_type("test.webp"), Some("image/webp".to_string()));
+        assert_eq!(get_mime_type("test.pdf"), Some("application/pdf".to_string()));
+        assert_eq!(get_mime_type("test.txt"), Some("text/plain".to_string()));
+        assert_eq!(get_mime_type("test.md"), Some("text/markdown".to_string()));
+        assert_eq!(get_mime_type("test.unknown"), None);
+        assert_eq!(get_mime_type("test"), None);
+    }
+}
+

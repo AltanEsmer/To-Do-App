@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Bell, Edit } from 'lucide-react'
+import { Bell, Edit, Upload } from 'lucide-react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { Task, useTasks } from '../store/useTasks'
 import * as tauriAdapter from '../api/tauriAdapter'
@@ -8,6 +8,8 @@ import { isTauri } from '../utils/tauri'
 import clsx from 'clsx'
 import { useKeyboardShortcuts } from '../utils/useKeyboardShortcuts'
 import { EditTaskModal } from './EditTaskModal'
+import { AttachmentCard } from './ui/AttachmentCard'
+import { useToast } from './ui/use-toast'
 
 interface TaskDetailsModalProps {
   task: Task | null
@@ -17,6 +19,7 @@ interface TaskDetailsModalProps {
 
 export function TaskDetailsModal({ task, open, onOpenChange }: TaskDetailsModalProps) {
   const { updateTask, getTaskById } = useTasks()
+  const { toast } = useToast()
   const [attachments, setAttachments] = useState<tauriAdapter.Attachment[]>([])
   const [imageUrls, setImageUrls] = useState<Map<string, string>>(new Map())
   const [loading, setLoading] = useState(false)
@@ -24,6 +27,8 @@ export function TaskDetailsModal({ task, open, onOpenChange }: TaskDetailsModalP
   const [notificationRepeat, setNotificationRepeat] = useState(false)
   const [editModalOpen, setEditModalOpen] = useState(false)
   const [currentTask, setCurrentTask] = useState<Task | null>(task)
+  const [isDragging, setIsDragging] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const isImage = (attachment: tauriAdapter.Attachment): boolean => {
     // Check by MIME type
@@ -149,62 +154,166 @@ export function TaskDetailsModal({ task, open, onOpenChange }: TaskDetailsModalP
     disabled: !open,
   })
 
-  const handleAddAttachment = async () => {
+  const handleAddAttachment = async (filePath?: string) => {
     if (!currentTask) return
     if (!isTauri()) {
-      alert('Attachments are only available in Tauri desktop app. Use npm run tauri:dev to run the desktop version.')
+      toast({
+        title: 'Not available',
+        description: 'Attachments are only available in Tauri desktop app. Use npm run tauri:dev to run the desktop version.',
+        variant: 'default',
+      })
       return
     }
-    try {
-      const { open } = await import('@tauri-apps/api/dialog')
-      const selected = await open({
-        multiple: false,
-        title: 'Select image to attach',
-        filters: [{
-          name: 'Images',
-          extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg']
-        }]
-      })
 
-      if (selected && typeof selected === 'string') {
-        setLoading(true)
-        try {
-          await tauriAdapter.addAttachment(currentTask.id, selected)
-          await loadAttachments()
-        } catch (error) {
-          console.error('Failed to add attachment:', error)
-        } finally {
-          setLoading(false)
+    let selectedPath = filePath
+
+    if (!selectedPath) {
+      try {
+        const { open } = await import('@tauri-apps/api/dialog')
+        const selected = await open({
+          multiple: false,
+          title: 'Select file to attach',
+          filters: [{
+            name: 'Supported Files',
+            extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'pdf', 'txt', 'md']
+          }, {
+            name: 'Images',
+            extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp']
+          }, {
+            name: 'PDF',
+            extensions: ['pdf']
+          }, {
+            name: 'Text',
+            extensions: ['txt', 'md']
+          }]
+        })
+
+        if (selected && typeof selected === 'string') {
+          selectedPath = selected
+        } else {
+          return
         }
+      } catch (error) {
+        console.error('Failed to open file dialog:', error)
+        toast({
+          title: 'Error',
+          description: 'Failed to open file dialog.',
+          variant: 'destructive',
+        })
+        return
       }
-    } catch (error) {
-      console.error('Failed to open file dialog:', error)
     }
+
+    if (selectedPath) {
+      setLoading(true)
+      try {
+        await tauriAdapter.addAttachment(currentTask.id, selectedPath)
+        await loadAttachments()
+        toast({
+          title: 'Success',
+          description: 'File attached successfully.',
+          variant: 'default',
+        })
+      } catch (error: any) {
+        console.error('Failed to add attachment:', error)
+        toast({
+          title: 'Error',
+          description: error?.message || 'Failed to add attachment.',
+          variant: 'destructive',
+        })
+      } finally {
+        setLoading(false)
+      }
+    }
+  }
+
+  const handleFileInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files || files.length === 0) return
+
+    if (!isTauri()) {
+      toast({
+        title: 'Not available',
+        description: 'File input is only available in Tauri desktop app.',
+        variant: 'default',
+      })
+      return
+    }
+
+    // For Tauri, we need to use the file dialog instead
+    // File input doesn't work well with Tauri's file system
+    fileInputRef.current?.click()
+  }
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(true)
+  }
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+  }
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+
+    if (!isTauri()) {
+      toast({
+        title: 'Not available',
+        description: 'Drag and drop is only available in Tauri desktop app.',
+        variant: 'default',
+      })
+      return
+    }
+
+    const files = e.dataTransfer.files
+    if (files.length === 0) return
+
+    // In Tauri, we can't directly use File objects from drag-and-drop
+    // We need to prompt the user to select files via dialog
+    toast({
+      title: 'Drag and drop',
+      description: 'Please use the "Attach file" button to select files in Tauri mode.',
+      variant: 'default',
+    })
   }
 
   const handleDeleteAttachment = async (id: string) => {
     try {
+      // Check if this was the background image
+      const wasBackground = localStorage.getItem(`task_bg_image_${currentTask?.id}`) === id
+      
       await tauriAdapter.deleteAttachment(id)
       await loadAttachments()
+      
+      // Remove image URL if it exists
+      setImageUrls((prev) => {
+        const newMap = new Map(prev)
+        const url = newMap.get(id)
+        if (url) {
+          URL.revokeObjectURL(url)
+        }
+        newMap.delete(id)
+        return newMap
+      })
+      
+      // If this was the background image, remove it and notify TaskCard
+      if (wasBackground && currentTask) {
+        localStorage.removeItem(`task_bg_image_${currentTask.id}`)
+        window.dispatchEvent(new CustomEvent('task-background-changed', { detail: { taskId: currentTask.id } }))
+      }
     } catch (error) {
       console.error('Failed to delete attachment:', error)
-    }
-  }
-
-  const handleOpenAttachment = async (attachment: tauriAdapter.Attachment) => {
-    if (!isTauri()) {
-      alert('Opening attachments is only available in Tauri desktop app.')
-      return
-    }
-    try {
-      const { appDataDir } = await import('@tauri-apps/api/path')
-      const { join } = await import('@tauri-apps/api/path')
-      const { open: openPath } = await import('@tauri-apps/api/shell')
-      const dataDir = await appDataDir()
-      const fullPath = await join(dataDir, attachment.path)
-      await openPath(fullPath)
-    } catch (error) {
-      console.error('Failed to open attachment:', error)
+      toast({
+        title: 'Error',
+        description: 'Failed to delete attachment.',
+        variant: 'destructive',
+      })
     }
   }
 
@@ -328,63 +437,106 @@ export function TaskDetailsModal({ task, open, onOpenChange }: TaskDetailsModalP
                       <div>
                         <h4 className="mb-2 text-sm font-medium text-foreground">Attachments</h4>
                         <div className="space-y-3">
-                          {attachments.filter(isImage).length > 0 ? (
-                            <div className="grid grid-cols-2 gap-3">
-                              {attachments.filter(isImage).map((attachment) => {
+                          {attachments.length > 0 ? (
+                            <div className="space-y-2">
+                              {attachments.map((attachment) => {
                                 const imageUrl = imageUrls.get(attachment.id)
+                                const isImageAttachment = isImage(attachment)
+                                const isSelectedBackground = localStorage.getItem(`task_bg_image_${currentTask.id}`) === attachment.id
+                                
                                 return (
-                                  <div
-                                    key={attachment.id}
-                                    className="relative group rounded-lg border border-border bg-background overflow-hidden"
-                                  >
-                                    {imageUrl ? (
-                                      <img
-                                        src={imageUrl}
-                                        alt={attachment.filename}
-                                        className="w-full h-32 object-cover cursor-pointer bg-muted"
-                                        onClick={() => handleOpenAttachment(attachment)}
-                                        onError={(e) => {
-                                          console.error('Image failed to load:', imageUrl, attachment)
-                                          e.currentTarget.style.display = 'none'
+                                  <div key={attachment.id} className="relative">
+                                    <AttachmentCard
+                                      attachment={attachment}
+                                      imageUrl={imageUrl}
+                                      onDelete={handleDeleteAttachment}
+                                      onImageLoad={() => {
+                                        console.log('Image loaded:', attachment.filename)
+                                      }}
+                                    />
+                                    {isImageAttachment && (
+                                      <button
+                                        onClick={() => {
+                                          if (isSelectedBackground) {
+                                            localStorage.removeItem(`task_bg_image_${currentTask.id}`)
+                                            toast({
+                                              title: 'Background removed',
+                                              description: 'Background image removed. The card will update when you close and reopen it.',
+                                              variant: 'default',
+                                            })
+                                          } else {
+                                            localStorage.setItem(`task_bg_image_${currentTask.id}`, attachment.id)
+                                            toast({
+                                              title: 'Background set',
+                                              description: 'Image set as background. The card will update when you close and reopen it.',
+                                              variant: 'default',
+                                            })
+                                          }
+                                          // Dispatch custom event to notify TaskCard
+                                          window.dispatchEvent(new CustomEvent('task-background-changed', { detail: { taskId: currentTask.id } }))
                                         }}
-                                        onLoad={() => {
-                                          console.log('Image loaded successfully:', attachment.filename)
-                                        }}
-                                      />
-                                    ) : (
-                                      <div className="w-full h-32 flex items-center justify-center bg-muted">
-                                        <span className="text-xs text-muted-foreground">Loading...</span>
-                                      </div>
+                                        className={clsx(
+                                          'mt-2 w-full text-xs px-2 py-1 rounded border transition-colors',
+                                          isSelectedBackground
+                                            ? 'bg-primary-500 text-white border-primary-500'
+                                            : 'bg-muted text-muted-foreground border-border hover:bg-muted/80'
+                                        )}
+                                        aria-label={isSelectedBackground ? 'Remove as background' : 'Set as background'}
+                                      >
+                                        {isSelectedBackground ? '✓ Set as background' : 'Set as background'}
+                                      </button>
                                     )}
-                                    <button
-                                      onClick={() => handleDeleteAttachment(attachment.id)}
-                                      className="absolute top-2 right-2 p-1 rounded-full bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
-                                      aria-label={`Delete ${attachment.filename}`}
-                                    >
-                                      <X className="h-3 w-3" />
-                                    </button>
-                                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-2">
-                                      <p className="text-xs text-white truncate">{attachment.filename}</p>
-                                    </div>
                                   </div>
                                 )
                               })}
                             </div>
                           ) : (
                             <p className="text-sm text-muted-foreground text-center py-4">
-                              No images attached
+                              No attachments
                             </p>
                           )}
-                          <button
-                            onClick={handleAddAttachment}
-                            disabled={loading}
+                          
+                          {/* File input (hidden, triggered by button) */}
+                          <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept=".png,.jpg,.jpeg,.gif,.webp,.pdf,.txt,.md,application/pdf,text/plain,text/markdown"
+                            className="hidden"
+                            onChange={handleFileInputChange}
+                            aria-label="Attach file (image, PDF, text)"
+                          />
+                          
+                          {/* Drag and drop zone */}
+                          <div
+                            onDragOver={handleDragOver}
+                            onDragLeave={handleDragLeave}
+                            onDrop={handleDrop}
                             className={clsx(
-                              'w-full rounded-lg border border-dashed border-border p-2 text-sm text-muted-foreground transition-colors hover:border-primary-500 hover:text-primary-500',
+                              'w-full rounded-lg border border-dashed p-4 text-center transition-colors',
+                              isDragging
+                                ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
+                                : 'border-border hover:border-primary-500 hover:bg-muted/30',
                               loading && 'opacity-50 cursor-not-allowed'
                             )}
                           >
-                            {loading ? 'Adding...' : '+ Add Image'}
-                          </button>
+                            <button
+                              onClick={() => handleAddAttachment()}
+                              disabled={loading}
+                              className={clsx(
+                                'flex items-center justify-center gap-2 w-full text-sm text-muted-foreground transition-colors hover:text-primary-500',
+                                loading && 'opacity-50 cursor-not-allowed'
+                              )}
+                              aria-label="Attach file (image, PDF, text)"
+                            >
+                              <Upload className="h-4 w-4" />
+                              {loading ? 'Adding...' : 'Attach file (image, PDF, text)'}
+                            </button>
+                            {isTauri() && (
+                              <p className="text-xs text-muted-foreground mt-2">
+                                Drag and drop files here (or click to select)
+                              </p>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>

@@ -51,6 +51,7 @@ pub struct Attachment {
     pub filename: String,
     pub path: String,
     pub mime: Option<String>,
+    pub size: Option<i64>,
     pub created_at: i64,
 }
 
@@ -389,8 +390,9 @@ pub fn toggle_complete(
         create_recurring_instance(&db.conn, &id, &recurrence_type, recurrence_interval)?;
     }
     
-    // Handle gamification: grant XP and update streak if task is being completed
+    // Handle gamification: grant XP when completing, revoke XP when undoing
     if new_completed.is_some() && !was_completed {
+        // Task is being completed - grant XP
         // Determine XP amount based on priority
         let xp_amount = match priority.as_str() {
             "low" => 10,
@@ -407,6 +409,22 @@ pub fn toggle_complete(
         
         // Check for badges
         let _ = check_and_award_badges_internal(&db.conn);
+    } else if was_completed && new_completed.is_none() {
+        // Task is being uncompleted - revoke XP
+        // Find the most recent XP history entry for this task
+        let xp_entry: Option<(i32, String)> = db.conn.query_row(
+            "SELECT xp_amount, id FROM xp_history WHERE task_id = ?1 AND source = 'task_completion' ORDER BY created_at DESC LIMIT 1",
+            params![id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        ).ok();
+        
+        if let Some((xp_amount, history_id)) = xp_entry {
+            // Revoke the XP
+            let _ = revoke_xp_internal(&db.conn, xp_amount, history_id);
+            
+            // Update streak
+            let _ = update_streak_internal(&db.conn);
+        }
     }
     
     fetch_task(&db.conn, &id)
@@ -688,7 +706,7 @@ pub fn get_attachments(
 ) -> Result<Vec<Attachment>, String> {
     let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
     
-    let mut stmt = db.conn.prepare("SELECT id, task_id, filename, path, mime, created_at FROM attachments WHERE task_id = ?1 ORDER BY created_at").map_err(|e| format!("Query error: {}", e))?;
+    let mut stmt = db.conn.prepare("SELECT id, task_id, filename, path, mime, size, created_at FROM attachments WHERE task_id = ?1 ORDER BY created_at").map_err(|e| format!("Query error: {}", e))?;
     let rows = stmt.query_map(params![task_id], |row| {
         Ok(Attachment {
             id: row.get(0)?,
@@ -696,7 +714,8 @@ pub fn get_attachments(
             filename: row.get(2)?,
             path: row.get(3)?,
             mime: row.get(4)?,
-            created_at: row.get(5)?,
+            size: row.get(5)?,
+            created_at: row.get(6)?,
         })
     }).map_err(|e| format!("Query execution error: {}", e))?;
     
@@ -715,9 +734,18 @@ pub fn add_attachment(
     task_id: String,
     file_path: String,
 ) -> Result<Attachment, String> {
-    use crate::attachments::copy_attachment_to_storage;
+    use crate::attachments::{copy_attachment_to_storage, validate_file_type, get_mime_type};
+    use std::fs;
+    
+    // Validate file type
+    validate_file_type(&file_path)?;
     
     let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+    
+    // Get file size before copying
+    let file_size: Option<i64> = fs::metadata(&file_path)
+        .ok()
+        .and_then(|m| m.len().try_into().ok());
     
     // Copy file to storage
     let stored_path = copy_attachment_to_storage(&app_handle, &file_path, &task_id)
@@ -730,29 +758,19 @@ pub fn add_attachment(
         .unwrap_or("unknown")
         .to_string();
     
-    // Guess MIME type from extension
-    let mime = std::path::Path::new(&file_path)
-        .extension()
-        .and_then(|e| e.to_str())
-        .and_then(|ext| match ext.to_lowercase().as_str() {
-            "pdf" => Some("application/pdf"),
-            "jpg" | "jpeg" => Some("image/jpeg"),
-            "png" => Some("image/png"),
-            "gif" => Some("image/gif"),
-            "txt" => Some("text/plain"),
-            _ => None,
-        });
+    // Get MIME type from extension
+    let mime = get_mime_type(&file_path);
     
     let id = uuid::Uuid::new_v4().to_string();
     let created_at = now();
     
     db.conn.execute(
-        "INSERT INTO attachments (id, task_id, filename, path, mime, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-        params![id.clone(), task_id, filename, stored_path, mime, created_at],
+        "INSERT INTO attachments (id, task_id, filename, path, mime, size, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        params![id.clone(), task_id, filename, stored_path, mime, file_size, created_at],
     ).map_err(|e| format!("Failed to create attachment record: {}", e))?;
     
     db.conn.query_row(
-        "SELECT id, task_id, filename, path, mime, created_at FROM attachments WHERE id = ?1",
+        "SELECT id, task_id, filename, path, mime, size, created_at FROM attachments WHERE id = ?1",
         params![id],
         |row| {
             Ok(Attachment {
@@ -761,7 +779,8 @@ pub fn add_attachment(
                 filename: row.get(2)?,
                 path: row.get(3)?,
                 mime: row.get(4)?,
-                created_at: row.get(5)?,
+                size: row.get(5)?,
+                created_at: row.get(6)?,
             })
         },
     ).map_err(|e| format!("Failed to fetch created attachment: {}", e))
@@ -796,6 +815,145 @@ pub fn delete_attachment(
             .ok_or_else(|| "Failed to get app data directory".to_string())?;
         let full_path = app_data_dir.join(&path);
         let _ = fs::remove_file(full_path); // Ignore errors if file doesn't exist
+    }
+    
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_attachment(
+    db: State<'_, Arc<Mutex<DbConnection>>>,
+    id: String,
+) -> Result<Attachment, String> {
+    let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+    
+    db.conn.query_row(
+        "SELECT id, task_id, filename, path, mime, size, created_at FROM attachments WHERE id = ?1",
+        params![id],
+        |row| {
+            Ok(Attachment {
+                id: row.get(0)?,
+                task_id: row.get(1)?,
+                filename: row.get(2)?,
+                path: row.get(3)?,
+                mime: row.get(4)?,
+                size: row.get(5)?,
+                created_at: row.get(6)?,
+            })
+        },
+    ).map_err(|e| format!("Failed to fetch attachment: {}", e))
+}
+
+#[tauri::command]
+pub fn get_attachment_path(
+    db: State<'_, Arc<Mutex<DbConnection>>>,
+    app_handle: tauri::AppHandle,
+    id: String,
+) -> Result<String, String> {
+    let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+    
+    let path: String = db.conn.query_row(
+        "SELECT path FROM attachments WHERE id = ?1",
+        params![id],
+        |row| row.get(0),
+    ).map_err(|e| format!("Failed to fetch attachment path: {}", e))?;
+    
+    let app_data_dir = app_handle
+        .path_resolver()
+        .app_data_dir()
+        .ok_or_else(|| "Failed to get app data directory".to_string())?;
+    
+    let full_path = app_data_dir.join(&path);
+    
+    if !full_path.exists() {
+        return Err("Attachment file not found".to_string());
+    }
+    
+    Ok(full_path.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+pub fn read_attachment_file_content(
+    db: State<'_, Arc<Mutex<DbConnection>>>,
+    app_handle: tauri::AppHandle,
+    id: String,
+) -> Result<String, String> {
+    use std::fs;
+    
+    let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+    
+    let path: String = db.conn.query_row(
+        "SELECT path FROM attachments WHERE id = ?1",
+        params![id],
+        |row| row.get(0),
+    ).map_err(|e| format!("Failed to fetch attachment path: {}", e))?;
+    
+    let app_data_dir = app_handle
+        .path_resolver()
+        .app_data_dir()
+        .ok_or_else(|| "Failed to get app data directory".to_string())?;
+    
+    let full_path = app_data_dir.join(&path);
+    
+    if !full_path.exists() {
+        return Err("Attachment file not found".to_string());
+    }
+    
+    // Read file as text (for text files)
+    fs::read_to_string(&full_path)
+        .map_err(|e| format!("Failed to read file: {}", e))
+}
+
+#[tauri::command]
+pub fn open_attachment_file(
+    db: State<'_, Arc<Mutex<DbConnection>>>,
+    app_handle: tauri::AppHandle,
+    id: String,
+) -> Result<(), String> {
+    use std::process::Command as ProcessCommand;
+    
+    let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+    
+    let path: String = db.conn.query_row(
+        "SELECT path FROM attachments WHERE id = ?1",
+        params![id],
+        |row| row.get(0),
+    ).map_err(|e| format!("Failed to fetch attachment path: {}", e))?;
+    
+    let app_data_dir = app_handle
+        .path_resolver()
+        .app_data_dir()
+        .ok_or_else(|| "Failed to get app data directory".to_string())?;
+    
+    let full_path = app_data_dir.join(&path);
+    
+    if !full_path.exists() {
+        return Err("Attachment file not found".to_string());
+    }
+    
+    // Open file with system default application
+    #[cfg(target_os = "windows")]
+    {
+        ProcessCommand::new("cmd")
+            .args(["/C", "start", "", &full_path.to_string_lossy()])
+            .spawn()
+            .map_err(|e| format!("Failed to open file: {}", e))?;
+    }
+    
+    #[cfg(target_os = "macos")]
+    {
+        ProcessCommand::new("open")
+            .arg(&full_path)
+            .spawn()
+            .map_err(|e| format!("Failed to open file: {}", e))?;
+    }
+    
+    #[cfg(target_os = "linux")]
+    {
+        ProcessCommand::new("xdg-open")
+            .arg(&full_path)
+            .spawn()
+            .map_err(|e| format!("Failed to open file: {}", e))?;
     }
     
     Ok(())
@@ -969,7 +1127,7 @@ pub fn export_data(
     
     // Get all attachments
     let mut all_attachments = Vec::new();
-    let mut stmt = db.conn.prepare("SELECT id, task_id, filename, path, mime, created_at FROM attachments ORDER BY created_at").map_err(|e| format!("Query error: {}", e))?;
+    let mut stmt = db.conn.prepare("SELECT id, task_id, filename, path, mime, size, created_at FROM attachments ORDER BY created_at").map_err(|e| format!("Query error: {}", e))?;
     let rows = stmt.query_map([], |row| {
         Ok(Attachment {
             id: row.get(0)?,
@@ -977,7 +1135,8 @@ pub fn export_data(
             filename: row.get(2)?,
             path: row.get(3)?,
             mime: row.get(4)?,
-            created_at: row.get(5)?,
+            size: row.get(5)?,
+            created_at: row.get(6)?,
         })
     }).map_err(|e| format!("Query execution error: {}", e))?;
     for row in rows {
@@ -1610,6 +1769,39 @@ fn grant_xp_internal(conn: &rusqlite::Connection, xp: i32, source: String, task_
         "INSERT INTO xp_history (id, user_id, xp_amount, source, task_id, created_at) VALUES (?1, 'default', ?2, ?3, ?4, ?5)",
         params![history_id, xp, source, task_id, now],
     ).map_err(|e| format!("Failed to record XP history: {}", e))?;
+    
+    Ok(GrantXpResult {
+        level_up: leveled_up,
+        new_level,
+        total_xp: new_total_xp,
+        current_xp: new_current_xp,
+        xp_to_next_level: new_xp_to_next_level,
+    })
+}
+
+// Revoke XP (subtract XP and remove history entry)
+fn revoke_xp_internal(conn: &rusqlite::Connection, xp: i32, history_id: String) -> Result<GrantXpResult, String> {
+    let progress = get_user_progress_internal(conn)?;
+    
+    let previous_level = progress.current_level;
+    let new_total_xp = (progress.total_xp - xp as i64).max(0);
+    let new_level = calculate_level(new_total_xp);
+    let new_xp_to_next_level = calculate_xp_to_next_level(new_level);
+    let new_current_xp = calculate_current_xp(new_total_xp, new_level);
+    let leveled_up = false; // Can't level up when revoking XP
+    
+    // Update user progress
+    let now = now();
+    conn.execute(
+        "UPDATE user_progress SET total_xp = ?1, current_level = ?2, updated_at = ?3 WHERE id = 'default'",
+        params![new_total_xp, new_level, now],
+    ).map_err(|e| format!("Failed to update user progress: {}", e))?;
+    
+    // Remove the XP history entry
+    conn.execute(
+        "DELETE FROM xp_history WHERE id = ?1",
+        params![history_id],
+    ).map_err(|e| format!("Failed to remove XP history: {}", e))?;
     
     Ok(GrantXpResult {
         level_up: leveled_up,

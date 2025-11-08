@@ -1,178 +1,54 @@
-## Cursor Task — Build Gamification UI Components Using shadcn/ui
-
-### Context  
-We are adding gamification (XP, levels) to our to-do app. Implement the visual UI pieces using **shadcn/ui** components (Radix + Tailwind). Components should be accessible, composable, and styled to match the existing design system.
-
-## Phase 2: Gamification Backend Integration & Advanced Features
+## Cursor Task — Add multi-type attachments (images, PDF, text) to Task Details using shadcn/ui
 
 ### Context
-The gamification UI is now complete. This phase focuses on backend persistence, streak tracking, badges system, and enhanced gamification features to make the system fully functional and engaging.
+Existing app: React + TypeScript frontend using shadcn/ui + Tailwind; Tauri (Rust) backend using SQLite. Currently attachments support images only. Implement attachments support for **images, PDFs, and plain text files (.txt, .md)**. Use shadcn/ui components for UI and Tauri commands for file copying and DB updates.
 
-### Backend Integration
+### Goals (strict)
+1. Add frontend UI to Task Details to allow selecting files (images, pdf, text).
+2. Accept via file input and via optional drag-and-drop (drag-and-drop is optional; file input mandatory).
+3. On selection, call a Tauri command `add_attachment(taskId, filePath)` that copies the file into the app attachments directory and creates a DB record with metadata (filename, stored_path, mime, size, created_at).
+4. Update UI to show attachment cards with:
+   - Thumbnail for images,
+   - PDF icon + "View" button for PDFs (opens Dialog with embedded preview or opens external viewer),
+   - Text snippet preview for text files (first 300 characters) and a "View" button to open the full text in Dialog.
+5. Provide actions per attachment: Open (embedded or external), Download/Save As (save dialog), Delete (confirmation toast).
+6. Use shadcn/ui components: `Input` (type=file), `Button`, `Dialog`, `Card`/`List`, `Badge`, and `Toast`.
+7. Back-end: add or reuse `add_attachment` Tauri command. Ensure it:
+   - Validates MIME and file extension,
+   - Copies file to attachments folder inside app data dir (preserve original extension),
+   - Records metadata in `attachments` table with columns: id (uuid), task_id, filename, stored_path, mime, size, created_at.
+   - Returns attachment metadata to frontend.
+8. Ensure attachments are downloadable and openable cross-platform via Tauri APIs.
+9. Add small unit/integration tests:
+   - Rust test for `add_attachment` copying file and inserting DB row.
+   - TS test for the file input parsing / frontend call (mocked `invoke`).
 
-1. **Database Schema for Gamification**
-   - Create migration for `user_progress` table:
-     - `id` (TEXT PRIMARY KEY)
-     - `total_xp` (INTEGER DEFAULT 0)
-     - `current_level` (INTEGER DEFAULT 1)
-     - `current_streak` (INTEGER DEFAULT 0)
-     - `longest_streak` (INTEGER DEFAULT 0)
-     - `last_completion_date` (INTEGER, timestamp)
-     - `created_at` (INTEGER)
-     - `updated_at` (INTEGER)
-   - Create migration for `badges` table:
-     - `id` (TEXT PRIMARY KEY)
-     - `user_id` (TEXT, references user_progress)
-     - `badge_type` (TEXT) - e.g., "first_task", "week_warrior", "month_master"
-     - `earned_at` (INTEGER, timestamp)
-     - `metadata` (TEXT, JSON for additional badge data)
-   - Create migration for `xp_history` table (optional, for analytics):
-     - `id` (TEXT PRIMARY KEY)
-     - `user_id` (TEXT)
-     - `xp_amount` (INTEGER)
-     - `source` (TEXT) - e.g., "task_completion", "streak_bonus"
-     - `task_id` (TEXT, nullable)
-     - `created_at` (INTEGER)
+### Allowed file types (accept & validate)
+- Images: `image/*`  (png, jpg, jpeg, gif, webp)
+- PDF: `application/pdf` (`.pdf`)
+- Text: `text/plain`, markdown `.md` (mime `text/markdown` or fallback to `text/plain`)
 
-2. **Rust Backend Commands**
-   - `get_user_progress()` → Returns UserProgress struct with all gamification data
-   - `grant_xp(xp: i32, source: String, task_id: Option<String>)` → Grants XP and returns updated progress + level-up status
-   - `update_streak()` → Calculates and updates daily completion streak
-   - `get_badges()` → Returns list of earned badges
-   - `check_and_award_badges()` → Checks milestone conditions and awards badges
-   - `get_xp_history(days: Option<i32>)` → Returns XP history for analytics
+Frontend `accept` attribute example:
+`accept=".png,.jpg,.jpeg,.gif,.webp,.pdf,.txt,.md,application/pdf,text/plain,text/markdown"`
 
-3. **TypeScript Adapter Updates**
-   - Add `UserProgress` interface matching Rust struct
-   - Add `Badge` interface
-   - Add `XpHistoryEntry` interface
-   - Update `tauriAdapter.ts` with new command wrappers
-   - Handle level-up detection from backend response
+### Files to modify / add
+- `src/components/TaskDetailsModal.tsx` — add attachment UI, file picker, card list, preview dialog, delete action.
+- `src/components/ui/AttachmentCard.tsx` — new reusable attachment card UI built with shadcn primitives.
+- `src/api/tauriAdapter.ts` — add `addAttachment(taskId: string, path: string)`, `deleteAttachment(id: string)`, `downloadAttachment(id: string)` adapters that call `invoke`.
+- `src-tauri/src/attachments.rs` (or update `attachments.rs`) — implement `add_attachment`, `delete_attachment`, `get_attachment`, `stream_attachment` commands.
+- `src-tauri/migrations/XXX_add_attachment_fields.sql` (if attachments schema missing mime/filename/size/stored_path) — ensure attachments table has required fields.
+- `src-tauri/src/db.rs` — helper DB functions for attachments.
+- Tests: `src-tauri/tests/attachments.rs` and `src/__tests__/AttachmentInput.test.tsx`.
 
-### Streaks System
+### UX details & accessibility
+- File input button text: “Attach file (image, PDF, text)”.
+- Use `aria-label` for file input and preview dialog.
+- Modal preview must trap focus.
+- For large text files (>50KB) show a warning before loading whole text in-memory; we can load streaming or just show first NKB and a "Load full file" button.
+- If `invoke` fails (browser mode / offline), show a helpful toast and fallback to "simulate" local attachment in frontend store (documented).
 
-1. **Streak Calculation Logic**
-   - Track last completion date in user progress
-   - On task completion, check if completed today
-   - If yes and last completion was yesterday → increment streak
-   - If yes and last completion was today → no change
-   - If yes and last completion was >1 day ago → reset streak to 1
-   - Update longest streak if current streak exceeds it
-
-2. **Streak Rewards**
-   - Daily completion bonus: +5 XP for maintaining streak
-   - Weekly milestone (7 days): +50 XP bonus
-   - Monthly milestone (30 days): +200 XP bonus
-   - Show streak notifications in toast
-
-3. **Streak UI Components**
-   - Update `ProgressPanel` to show current streak with fire icon
-   - Add streak indicator to XPBar (optional)
-   - Create `StreakToast` component for streak milestones
-
-### Badges System
-
-1. **Badge Types & Criteria**
-   - **First Steps**: Complete first task
-   - **Task Master**: Complete 10 tasks
-   - **Productivity Pro**: Complete 50 tasks
-   - **Week Warrior**: Maintain 7-day streak
-   - **Month Master**: Maintain 30-day streak
-   - **Speed Demon**: Complete 5 tasks in one day
-   - **High Priority Hero**: Complete 10 high-priority tasks
-   - **Level Up**: Reach level 5, 10, 20, etc.
-   - **XP Collector**: Earn 1000, 5000, 10000 total XP
-
-2. **Badge UI Components**
-   - Create `BadgeCard` component showing badge icon, name, description, earned date
-   - Create `BadgesModal` component listing all badges (earned and locked)
-   - Update `ProgressPanel` to show recent badges
-   - Add badge notification toast when badge is earned
-   - Use lucide-react icons for different badge types
-
-3. **Badge Persistence**
-   - Store badges in database
-   - Check badge eligibility on XP grant, task completion, streak updates
-   - Prevent duplicate badge awards
-
-### Enhanced XP System
-
-1. **XP Multipliers & Bonuses**
-   - Streak bonus: +5 XP per day of streak (capped at +50 XP)
-   - Completion speed bonus: Complete task before due date → +10% XP
-   - Perfect week bonus: Complete all tasks in a week → +100 XP
-   - Project completion bonus: Complete all tasks in a project → +50 XP
-
-2. **XP History & Analytics**
-   - Store XP transactions in `xp_history` table
-   - Create `XpHistoryChart` component using recharts
-   - Show XP trends over time (daily, weekly, monthly)
-   - Display in Statistics page or new Gamification page
-
-### Integration Points
-
-- Update `useXp` store to sync with backend on mount
-- Replace localStorage persistence with backend persistence
-- Update `toggleComplete` in `useTasks` to call backend `grant_xp` command
-- Add streak calculation to task completion flow
-- Add badge checking after XP grants and streak updates
-- Create new "Gamification" or "Achievements" page in Settings or as separate page
-
-### Component File Structure
-
-```
-src/
-├── components/
-│   ├── ui/
-│   │   ├── BadgeCard.tsx          # Individual badge display
-│   │   ├── BadgesModal.tsx        # Badges collection modal
-│   │   ├── StreakToast.tsx        # Streak milestone notifications
-│   │   └── XpHistoryChart.tsx    # XP history visualization
-│   └── ...
-├── pages/
-│   ├── Gamification.tsx           # New gamification stats page (optional)
-│   └── ...
-├── store/
-│   └── useXp.ts                   # Updated with backend sync
-└── api/
-    └── tauriAdapter.ts             # Updated with gamification commands
-```
-
-### Backend File Structure
-
-```
-src-tauri/
-├── src/
-│   ├── commands.rs                # Add gamification commands
-│   ├── services/
-│   │   └── gamification_service.rs # Gamification business logic
-│   └── ...
-└── migrations/
-    └── 0007_add_gamification.sql   # New migration
-```
-
-### Acceptance Criteria
-
-- ✅ User progress persisted to database
-- ✅ XP grants sync with backend and return level-up status
-- ✅ Streak calculation works correctly (daily, weekly, monthly)
-- ✅ Streak bonuses applied automatically
-- ✅ Badges awarded when criteria met
-- ✅ Badge UI shows earned and locked badges
-- ✅ XP history stored and can be queried
-- ✅ All gamification data survives app restarts
-- ✅ Backend commands are type-safe and error-handled
-
-### Commit Guidance
-
-- `feat: add gamification database schema and migrations`
-- `feat: implement Rust backend commands for XP and streaks`
-- `feat: add badge system with database persistence`
-- `feat: implement streak calculation and rewards`
-- `feat: add badge UI components and modal`
-- `feat: integrate backend gamification with frontend store`
-- `feat: add XP history tracking and analytics`
-
----
-
-If anything is ambiguous, pick a reasonable default and include comments / TODOs in the code for later review.
+### Backend spec (Tauri / Rust) — `add_attachment` command
+Signature:
+```rust
+#[tauri::command]
+pub fn add_attachment(task_id: Option<String>, source_path: String) -> Result<Attachment, String>

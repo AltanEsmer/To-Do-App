@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Check, X, Target } from 'lucide-react'
@@ -8,6 +8,8 @@ import { formatTaskDate, isOverdue } from '../utils/dateHelpers'
 import { TaskDetailsModal } from './TaskDetailsModal'
 import clsx from 'clsx'
 import * as Checkbox from '@radix-ui/react-checkbox'
+import * as tauriAdapter from '../api/tauriAdapter'
+import { isTauri } from '../utils/tauri'
 
 interface TaskCardProps {
   task: Task
@@ -21,7 +23,82 @@ export function TaskCard({ task }: TaskCardProps) {
   const { setActiveTask, setMode, startTimer } = useTimer()
   const navigate = useNavigate()
   const [detailsOpen, setDetailsOpen] = useState(false)
+  const [backgroundImageUrl, setBackgroundImageUrl] = useState<string | null>(null)
   const isOverdueTask = task.dueDate && !task.completed && isOverdue(task.dueDate)
+
+  // Load background image attachment
+  useEffect(() => {
+    if (!isTauri() || !task.id) return
+
+    const loadBackgroundImage = async () => {
+      // Clear existing background
+      if (backgroundImageUrl) {
+        URL.revokeObjectURL(backgroundImageUrl)
+        setBackgroundImageUrl(null)
+      }
+      try {
+        const attachments = await tauriAdapter.getAttachments(task.id)
+        const imageAttachments = attachments.filter((att) => {
+          if (att.mime && att.mime.startsWith('image/')) return true
+          const ext = att.filename.split('.').pop()?.toLowerCase()
+          return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'ico'].includes(ext || '')
+        })
+
+        if (imageAttachments.length > 0) {
+          // Check if a specific image is selected as background
+          const selectedImageId = localStorage.getItem(`task_bg_image_${task.id}`)
+          const selectedImage = selectedImageId 
+            ? imageAttachments.find(att => att.id === selectedImageId)
+            : null
+          
+          // Use selected image or first image
+          const imageToUse = selectedImage || imageAttachments[0]
+          try {
+            const { appDataDir } = await import('@tauri-apps/api/path')
+            const { join } = await import('@tauri-apps/api/path')
+            const { readBinaryFile } = await import('@tauri-apps/api/fs')
+            const dataDir = await appDataDir()
+            const fullPath = await join(dataDir, imageToUse.path)
+            const fileData = await readBinaryFile(fullPath)
+            
+            if (fileData && fileData.length > 0) {
+              const mimeType = imageToUse.mime || 
+                (imageToUse.filename.toLowerCase().endsWith('.png') ? 'image/png' :
+                 imageToUse.filename.toLowerCase().endsWith('.gif') ? 'image/gif' :
+                 imageToUse.filename.toLowerCase().endsWith('.webp') ? 'image/webp' :
+                 'image/jpeg')
+              const blob = new Blob([fileData], { type: mimeType })
+              const url = URL.createObjectURL(blob)
+              setBackgroundImageUrl(url)
+            }
+          } catch (error) {
+            console.error('Failed to load background image:', error)
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load attachments:', error)
+      }
+    }
+
+    loadBackgroundImage()
+
+    // Listen for background change events
+    const handleBackgroundChange = (e: CustomEvent) => {
+      if (e.detail.taskId === task.id) {
+        loadBackgroundImage()
+      }
+    }
+    window.addEventListener('task-background-changed', handleBackgroundChange as EventListener)
+
+    // Cleanup blob URL on unmount or when task changes
+    return () => {
+      window.removeEventListener('task-background-changed', handleBackgroundChange as EventListener)
+      if (backgroundImageUrl) {
+        URL.revokeObjectURL(backgroundImageUrl)
+        setBackgroundImageUrl(null)
+      }
+    }
+  }, [task.id])
 
   const handleFocus = () => {
     if (task.completed) return
@@ -52,13 +129,26 @@ export function TaskCard({ task }: TaskCardProps) {
       }}
       transition={{ duration: 0.2 }}
       className={clsx(
-        'group flex items-start gap-3 rounded-xl border border-border bg-card p-4 transition-all duration-200',
+        'group flex items-start gap-3 rounded-xl border border-border bg-card p-4 transition-all duration-200 relative overflow-hidden',
         'hover:border-primary-300 hover:shadow-xl hover:shadow-primary-500/10',
         'dark:hover:border-primary-700 dark:hover:shadow-primary-500/5',
         'hover:bg-card/95',
         task.completed && 'opacity-60'
       )}
+      style={{
+        backgroundImage: backgroundImageUrl ? `url(${backgroundImageUrl})` : undefined,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
+      }}
     >
+      {/* Background overlay for text readability */}
+      {backgroundImageUrl && (
+        <div className="absolute inset-0 bg-card/70 dark:bg-card/80" />
+      )}
+      
+      {/* Content with relative positioning */}
+      <div className="relative z-10 flex items-start gap-3 w-full">
       <Checkbox.Root
         checked={task.completed}
         onCheckedChange={() => {
@@ -117,32 +207,33 @@ export function TaskCard({ task }: TaskCardProps) {
         </div>
       </div>
 
-      <div className="flex items-center gap-2">
-        {!task.completed && (
+        <div className="flex items-center gap-2">
+          {!task.completed && (
+            <motion.button
+              onClick={handleFocus}
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.95 }}
+              className="focus-ring opacity-0 transition-opacity group-hover:opacity-100"
+              aria-label={`Start Pomodoro for "${task.title}"`}
+              title="Start Pomodoro"
+            >
+              <Target className="h-4 w-4 text-muted-foreground transition-colors hover:text-primary-600" />
+            </motion.button>
+          )}
           <motion.button
-            onClick={handleFocus}
+            onClick={() => {
+              deleteTask(task.id).catch((error) => {
+                console.error('Failed to delete task:', error)
+              })
+            }}
             whileHover={{ scale: 1.1 }}
             whileTap={{ scale: 0.95 }}
             className="focus-ring opacity-0 transition-opacity group-hover:opacity-100"
-            aria-label={`Start Pomodoro for "${task.title}"`}
-            title="Start Pomodoro"
+            aria-label={`Delete task "${task.title}"`}
           >
-            <Target className="h-4 w-4 text-muted-foreground transition-colors hover:text-primary-600" />
+            <X className="h-4 w-4 text-muted-foreground transition-colors hover:text-red-600" />
           </motion.button>
-        )}
-        <motion.button
-          onClick={() => {
-            deleteTask(task.id).catch((error) => {
-              console.error('Failed to delete task:', error)
-            })
-          }}
-          whileHover={{ scale: 1.1 }}
-          whileTap={{ scale: 0.95 }}
-          className="focus-ring opacity-0 transition-opacity group-hover:opacity-100"
-          aria-label={`Delete task "${task.title}"`}
-        >
-          <X className="h-4 w-4 text-muted-foreground transition-colors hover:text-red-600" />
-        </motion.button>
+        </div>
       </div>
 
       <TaskDetailsModal task={task} open={detailsOpen} onOpenChange={setDetailsOpen} />

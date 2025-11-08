@@ -1,4 +1,4 @@
-import { safeInvoke } from '../utils/tauri';
+import { safeInvoke, isTauri } from '../utils/tauri';
 
 // Types matching Rust structs
 export interface Task {
@@ -40,6 +40,7 @@ export interface Attachment {
   filename: string;
   path: string;
   mime?: string;
+  size?: number;
   created_at: number;
 }
 
@@ -209,6 +210,65 @@ export async function deleteAttachment(id: string): Promise<void> {
   return safeInvoke<void>('delete_attachment', { id }, () => {
     throw new Error('Tauri not available');
   });
+}
+
+export async function getAttachment(id: string): Promise<Attachment> {
+  return safeInvoke<Attachment>('get_attachment', { id }, () => {
+    throw new Error('Tauri not available');
+  });
+}
+
+export async function getAttachmentPath(id: string): Promise<string> {
+  return safeInvoke<string>('get_attachment_path', { id }, () => {
+    throw new Error('Tauri not available');
+  });
+}
+
+export async function readAttachmentFileContent(id: string): Promise<string> {
+  return safeInvoke<string>('read_attachment_file_content', { id }, () => {
+    throw new Error('Tauri not available');
+  });
+}
+
+export async function openAttachmentFile(id: string): Promise<void> {
+  return safeInvoke<void>('open_attachment_file', { id }, () => {
+    throw new Error('Tauri not available');
+  });
+}
+
+export async function downloadAttachment(id: string): Promise<void> {
+  if (!isTauri()) {
+    throw new Error('Tauri not available');
+  }
+  
+  try {
+    const { save } = await import('@tauri-apps/api/dialog');
+    const { appDataDir, join } = await import('@tauri-apps/api/path');
+    const { copyFile } = await import('@tauri-apps/api/fs');
+    
+    // Get attachment metadata
+    const attachment = await getAttachment(id);
+    
+    // Get source path
+    const dataDir = await appDataDir();
+    const sourcePath = await join(dataDir, attachment.path);
+    
+    // Open save dialog
+    const savePath = await save({
+      defaultPath: attachment.filename,
+      filters: [{
+        name: attachment.filename,
+        extensions: [attachment.filename.split('.').pop() || ''],
+      }],
+    });
+    
+    if (savePath && typeof savePath === 'string') {
+      await copyFile(sourcePath, savePath);
+    }
+  } catch (error) {
+    console.error('Failed to download attachment:', error);
+    throw error;
+  }
 }
 
 // Settings commands
