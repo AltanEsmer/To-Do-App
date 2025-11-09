@@ -192,6 +192,18 @@ fn main() {
             commands::translate_task_content,
             commands::save_translation_override,
             commands::get_translation,
+            commands::get_all_tags,
+            commands::get_task_tags,
+            commands::create_tag,
+            commands::delete_tag,
+            commands::add_tag_to_task,
+            commands::remove_tag_from_task,
+            commands::get_suggested_tags,
+            commands::get_tasks_by_tag,
+            commands::get_tasks_by_tags,
+            commands::create_task_relationship,
+            commands::delete_task_relationship,
+            commands::get_related_tasks,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

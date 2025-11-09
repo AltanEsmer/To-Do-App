@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Check, X, Target } from 'lucide-react'
+import { Check, X, Target, Link2 } from 'lucide-react'
 import { useTasks, Task } from '../store/useTasks'
 import { useTimer } from '../store/useTimer'
 import { formatTaskDate, isOverdue } from '../utils/dateHelpers'
@@ -10,6 +10,7 @@ import clsx from 'clsx'
 import * as Checkbox from '@radix-ui/react-checkbox'
 import * as tauriAdapter from '../api/tauriAdapter'
 import { isTauri } from '../utils/tauri'
+import { TagBadge } from './TagBadge'
 
 interface TaskCardProps {
   task: Task
@@ -19,11 +20,12 @@ interface TaskCardProps {
  * Task card component with checkbox, title, due date, and priority indicator
  */
 export function TaskCard({ task }: TaskCardProps) {
-  const { toggleComplete, deleteTask } = useTasks()
+  const { toggleComplete, deleteTask, getRelatedTasks } = useTasks()
   const { setActiveTask, setMode, startTimer } = useTimer()
   const navigate = useNavigate()
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [backgroundImageUrl, setBackgroundImageUrl] = useState<string | null>(null)
+  const [hasRelatedTasks, setHasRelatedTasks] = useState(false)
   const isOverdueTask = task.dueDate && !task.completed && isOverdue(task.dueDate)
 
   // Load background image attachment
@@ -99,6 +101,19 @@ export function TaskCard({ task }: TaskCardProps) {
       }
     }
   }, [task.id])
+
+  // Check if task has relationships
+  useEffect(() => {
+    const checkRelationships = async () => {
+      try {
+        const related = await getRelatedTasks(task.id)
+        setHasRelatedTasks(related.length > 0)
+      } catch (error) {
+        console.error('Failed to check relationships:', error)
+      }
+    }
+    checkRelationships()
+  }, [task.id, getRelatedTasks])
 
   const handleFocus = () => {
     if (task.completed) return
@@ -204,7 +219,22 @@ export function TaskCard({ task }: TaskCardProps) {
           >
             {task.priority}
           </span>
+          {hasRelatedTasks && (
+            <span className="flex items-center gap-1 text-xs text-muted-foreground" title="Has related tasks">
+              <Link2 className="h-3 w-3" />
+            </span>
+          )}
         </div>
+        {task.tags && task.tags.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1">
+            {task.tags.slice(0, 3).map((tag) => (
+              <TagBadge key={tag.id} tag={tag} clickable={false} />
+            ))}
+            {task.tags.length > 3 && (
+              <span className="text-xs text-muted-foreground">+{task.tags.length - 3}</span>
+            )}
+          </div>
+        )}
       </div>
 
         <div className="flex items-center gap-2">

@@ -20,6 +20,8 @@
     --color-foreground: #0f172a;
     --color-card: #ffffff;
     --color-card-foreground: #0f172a;
+    --color-popover: #ffffff;
+    --color-popover-foreground: #0f172a;
     --color-border: #e2e8f0;
     --color-muted: #f1f5f9;
     --color-muted-foreground: #64748b;
@@ -42,6 +44,8 @@
     --color-foreground: #ffffff;
     --color-card: #1a1a1a;
     --color-card-foreground: #ffffff;
+    --color-popover: #1a1a1a;
+    --color-popover-foreground: #ffffff;
     --color-border: #2a2a2a;
     --color-muted: #1a1a1a;
     --color-muted-foreground: #a0a0a0;

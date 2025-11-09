@@ -13,6 +13,10 @@ import { useToast } from './ui/use-toast'
 import { useTranslation } from 'react-i18next'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
 import { Badge } from './ui/badge'
+import { TagInput } from './TagInput'
+import { RelatedTasksPanel } from './RelatedTasksPanel'
+import { TagBadge } from './TagBadge'
+import { useTags } from '../store/useTags'
 
 interface TaskDetailsModalProps {
   task: Task | null
@@ -21,7 +25,8 @@ interface TaskDetailsModalProps {
 }
 
 export function TaskDetailsModal({ task, open, onOpenChange }: TaskDetailsModalProps) {
-  const { updateTask, getTaskById } = useTasks()
+  const { updateTask, getTaskById, syncTasks } = useTasks()
+  const { syncTags } = useTags()
   const { toast } = useToast()
   const { t } = useTranslation()
   const [attachments, setAttachments] = useState<tauriAdapter.Attachment[]>([])
@@ -156,6 +161,18 @@ export function TaskDetailsModal({ task, open, onOpenChange }: TaskDetailsModalP
       loadAttachments()
     }
   }, [editModalOpen, open, currentTask, getTaskById, loadAttachments])
+
+  // Refresh task data when tags change
+  const handleTagsChange = useCallback(() => {
+    if (currentTask) {
+      syncTasks().then(() => {
+        const updatedTask = getTaskById(currentTask.id)
+        if (updatedTask) {
+          setCurrentTask(updatedTask)
+        }
+      })
+    }
+  }, [currentTask, syncTasks, getTaskById])
 
   useKeyboardShortcuts({
     onEscape: () => {
@@ -334,7 +351,7 @@ export function TaskDetailsModal({ task, open, onOpenChange }: TaskDetailsModalP
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <AnimatePresence>
+        <AnimatePresence mode="wait">
           {open && (
             <>
               <Dialog.Overlay asChild>
@@ -345,7 +362,7 @@ export function TaskDetailsModal({ task, open, onOpenChange }: TaskDetailsModalP
                   className="fixed inset-0 z-50 bg-black/50"
                 />
               </Dialog.Overlay>
-              <Dialog.Content asChild>
+              <Dialog.Content asChild aria-describedby={undefined}>
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95, y: '-45%' }}
                   animate={{ opacity: 1, scale: 1, y: '-50%' }}
@@ -621,8 +638,8 @@ export function TaskDetailsModal({ task, open, onOpenChange }: TaskDetailsModalP
                       </Card>
 
                       {currentTask.dueDate && (
-                        <div>
-                          <div className="mb-2 flex items-center gap-2">
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-2">
                             <Bell className="h-4 w-4 text-muted-foreground" />
                             <h4 className="text-sm font-medium text-foreground">Notification Reminder</h4>
                           </div>
@@ -679,8 +696,31 @@ export function TaskDetailsModal({ task, open, onOpenChange }: TaskDetailsModalP
                         </div>
                       )}
 
+                      {/* Tags Section */}
+                      <div className="space-y-3">
+                        <h4 className="text-sm font-medium text-foreground">Tags</h4>
+                        {currentTask.tags && currentTask.tags.length > 0 && (
+                          <div className="flex flex-wrap gap-2">
+                            {currentTask.tags.map((tag) => (
+                              <TagBadge key={tag.id} tag={tag} clickable={false} />
+                            ))}
+                          </div>
+                        )}
+                        <TagInput
+                          taskId={currentTask.id}
+                          selectedTags={currentTask.tags || []}
+                          onTagsChange={handleTagsChange}
+                        />
+                      </div>
+
+                      {/* Related Tasks Section */}
                       <div>
-                        <h4 className="mb-2 text-sm font-medium text-foreground">Attachments</h4>
+                        <RelatedTasksPanel taskId={currentTask.id} />
+                      </div>
+
+                      {/* Attachments Section */}
+                      <div className="space-y-3">
+                        <h4 className="text-sm font-medium text-foreground">Attachments</h4>
                         <div className="space-y-3">
                           {attachments.length > 0 ? (
                             <div className="space-y-2">

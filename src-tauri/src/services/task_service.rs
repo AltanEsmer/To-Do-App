@@ -33,6 +33,7 @@ pub fn fetch_task(conn: &rusqlite::Connection, id: &str) -> Result<Task, String>
                 recurrence_parent_id: row.get(13).ok(),
                 reminder_minutes_before: row.get(14).ok().flatten(),
                 notification_repeat: row.get::<_, Option<i32>>(15).unwrap_or(None).map_or(false, |x| x != 0),
+                tags: None,
             })
         },
     ).map_err(|e| format!("Task not found: {}", e))
@@ -90,6 +91,7 @@ pub fn get_tasks(conn: &rusqlite::Connection, filter: Option<TaskFilter>) -> Res
             recurrence_parent_id: row.get(13).ok(),
             reminder_minutes_before: row.get(14).ok().flatten(),
             notification_repeat: row.get::<_, Option<i32>>(15).unwrap_or(None).map_or(false, |x| x != 0),
+            tags: None,
         })
     }).map_err(|e| format!("Query execution error: {}", e))?;
     

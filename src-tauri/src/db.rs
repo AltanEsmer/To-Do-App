@@ -350,6 +350,53 @@ fn run_migrations(conn: &Connection, app_handle: &tauri::AppHandle) -> anyhow::R
         }
     }
     
+    // Ensure tags and relationships tables exist (fallback if migration 0010 wasn't applied)
+    {
+        let tags_table_exists: bool = conn.query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='tags'",
+            [],
+            |row| Ok(row.get::<_, i64>(0)? > 0),
+        )?;
+        
+        if !tags_table_exists {
+            conn.execute_batch(
+                "CREATE TABLE IF NOT EXISTS tags (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL UNIQUE,
+                    color TEXT,
+                    created_at INTEGER NOT NULL,
+                    usage_count INTEGER DEFAULT 0
+                );
+                CREATE TABLE IF NOT EXISTS task_tags (
+                    id TEXT PRIMARY KEY,
+                    task_id TEXT NOT NULL,
+                    tag_id TEXT NOT NULL,
+                    created_at INTEGER NOT NULL,
+                    FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+                    FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE,
+                    UNIQUE(task_id, tag_id)
+                );
+                CREATE TABLE IF NOT EXISTS task_relationships (
+                    id TEXT PRIMARY KEY,
+                    task_id_1 TEXT NOT NULL,
+                    task_id_2 TEXT NOT NULL,
+                    relationship_type TEXT DEFAULT 'related',
+                    created_at INTEGER NOT NULL,
+                    FOREIGN KEY (task_id_1) REFERENCES tasks(id) ON DELETE CASCADE,
+                    FOREIGN KEY (task_id_2) REFERENCES tasks(id) ON DELETE CASCADE,
+                    UNIQUE(task_id_1, task_id_2),
+                    CHECK(task_id_1 != task_id_2)
+                );
+                CREATE INDEX IF NOT EXISTS idx_task_tags_task_id ON task_tags(task_id);
+                CREATE INDEX IF NOT EXISTS idx_task_tags_tag_id ON task_tags(tag_id);
+                CREATE INDEX IF NOT EXISTS idx_tags_name ON tags(name);
+                CREATE INDEX IF NOT EXISTS idx_tags_usage_count ON tags(usage_count);
+                CREATE INDEX IF NOT EXISTS idx_task_relationships_task_1 ON task_relationships(task_id_1);
+                CREATE INDEX IF NOT EXISTS idx_task_relationships_task_2 ON task_relationships(task_id_2);"
+            ).map_err(|e| anyhow::anyhow!("Failed to create tags and relationships tables: {}", e))?;
+        }
+    }
+    
     // Fallback: if no migrations were applied and tables don't exist, create them directly
     if !tables_exist && applied.is_empty() {
         // Create tables directly as fallback

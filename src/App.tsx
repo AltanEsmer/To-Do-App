@@ -8,7 +8,9 @@ import { Completed } from './pages/Completed'
 import { Settings } from './pages/Settings'
 import { Statistics } from './pages/Statistics'
 import { Pomodoro } from './pages/Pomodoro'
+import { Tags } from './pages/Tags'
 import { useTasks } from './store/useTasks'
+import { useTags } from './store/useTags'
 import { useXp } from './store/useXp'
 import { isTauri } from './utils/tauri'
 import { Toaster } from './components/ui/toaster'
@@ -16,6 +18,7 @@ import { LevelUpDialog } from './components/ui/LevelUpDialog'
 
 function App() {
   const { syncTasks } = useTasks()
+  const { syncTags } = useTags()
   const { hasLeveledUp, newLevel, resetLevelUp, syncFromBackend, loadBadges, checkBadges } = useXp()
   const [levelUpDialogOpen, setLevelUpDialogOpen] = useState(false)
 
@@ -58,6 +61,9 @@ function App() {
       syncTasks().catch((error) => {
         console.error('Failed to sync tasks:', error)
       })
+      syncTags().catch((error) => {
+        console.error('Failed to sync tags:', error)
+      })
     }
 
     // Listen for quick-add event from system tray (only in Tauri)
@@ -92,6 +98,7 @@ function App() {
               <Route path="/" element={<Dashboard />} />
               <Route path="/projects" element={<Projects />} />
               <Route path="/completed" element={<Completed />} />
+              <Route path="/tags" element={<Tags />} />
               <Route path="/statistics" element={<Statistics />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/pomodoro" element={<Pomodoro />} />

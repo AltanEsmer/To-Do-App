@@ -129,7 +129,7 @@ export function AddTaskModal({ open, onOpenChange }: AddTaskModalProps) {
                   className="fixed inset-0 z-50 bg-black/50"
                 />
               </Dialog.Overlay>
-              <Dialog.Content asChild>
+              <Dialog.Content asChild aria-describedby={undefined}>
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95, y: '-45%' }}
                   animate={{ opacity: 1, scale: 1, y: '-50%' }}

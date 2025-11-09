@@ -137,6 +137,7 @@ export function TemplatesModal({ open, onOpenChange, onUseTemplate }: TemplatesM
             <Dialog.Content
               className="fixed z-50 w-full max-w-3xl rounded-xl border border-border bg-card p-6 shadow-xl focus:outline-none"
               asChild
+              aria-describedby={undefined}
             >
               <motion.div
                 initial={{ opacity: 0, scale: 0.95, y: '-45%' }}

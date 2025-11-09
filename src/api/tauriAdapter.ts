@@ -17,6 +17,7 @@ export interface Task {
   recurrence_parent_id?: string;
   reminder_minutes_before?: number;
   notification_repeat?: boolean;
+  tags?: Tag[];
 }
 
 export interface Project {
@@ -44,12 +45,40 @@ export interface Attachment {
   created_at: number;
 }
 
+export interface Tag {
+  id: string;
+  name: string;
+  color?: string;
+  created_at: number;
+  usage_count: number;
+}
+
+export interface TaskRelationship {
+  id: string;
+  task_id_1: string;
+  task_id_2: string;
+  relationship_type: string;
+  created_at: number;
+}
+
+export interface CreateTagInput {
+  name: string;
+  color?: string;
+}
+
+export interface CreateRelationshipInput {
+  task_id_1: string;
+  task_id_2: string;
+  relationship_type?: string;
+}
+
 export interface TaskFilter {
   project_id?: string;
   completed?: boolean;
   due_before?: number;
   due_after?: number;
   search?: string;
+  tag_id?: string;
 }
 
 export interface CreateTaskInput {
@@ -608,4 +637,66 @@ export async function getTranslation(
     },
     () => Promise.resolve(null)
   )
+}
+
+// Tag commands
+export async function getAllTags(): Promise<Tag[]> {
+  return safeInvoke<Tag[]>('get_all_tags', undefined, () => Promise.resolve([]))
+}
+
+export async function getTaskTags(taskId: string): Promise<Tag[]> {
+  return safeInvoke<Tag[]>('get_task_tags', { taskId }, () => Promise.resolve([]))
+}
+
+export async function createTag(input: CreateTagInput): Promise<Tag> {
+  return safeInvoke<Tag>('create_tag', { input }, () => {
+    throw new Error('Tauri not available - cannot create tag in browser mode')
+  })
+}
+
+export async function deleteTag(tagId: string): Promise<void> {
+  return safeInvoke<void>('delete_tag', { tagId }, () => {
+    throw new Error('Tauri not available - cannot delete tag in browser mode')
+  })
+}
+
+export async function addTagToTask(taskId: string, tagId: string): Promise<void> {
+  return safeInvoke<void>('add_tag_to_task', { taskId, tagId }, () => {
+    throw new Error('Tauri not available - cannot add tag to task in browser mode')
+  })
+}
+
+export async function removeTagFromTask(taskId: string, tagId: string): Promise<void> {
+  return safeInvoke<void>('remove_tag_from_task', { taskId, tagId }, () => {
+    throw new Error('Tauri not available - cannot remove tag from task in browser mode')
+  })
+}
+
+export async function getSuggestedTags(search: string): Promise<Tag[]> {
+  return safeInvoke<Tag[]>('get_suggested_tags', { search }, () => Promise.resolve([]))
+}
+
+export async function getTasksByTag(tagId: string): Promise<Task[]> {
+  return safeInvoke<Task[]>('get_tasks_by_tag', { tagId }, () => Promise.resolve([]))
+}
+
+export async function getTasksByTags(tagIds: string[]): Promise<Task[]> {
+  return safeInvoke<Task[]>('get_tasks_by_tags', { tag_ids: tagIds }, () => Promise.resolve([]))
+}
+
+// Task relationship commands
+export async function createTaskRelationship(input: CreateRelationshipInput): Promise<TaskRelationship> {
+  return safeInvoke<TaskRelationship>('create_task_relationship', { input }, () => {
+    throw new Error('Tauri not available - cannot create task relationship in browser mode')
+  })
+}
+
+export async function deleteTaskRelationship(relationshipId: string): Promise<void> {
+  return safeInvoke<void>('delete_task_relationship', { relationship_id: relationshipId }, () => {
+    throw new Error('Tauri not available - cannot delete task relationship in browser mode')
+  })
+}
+
+export async function getRelatedTasks(taskId: string): Promise<Task[]> {
+  return safeInvoke<Task[]>('get_related_tasks', { taskId }, () => Promise.resolve([]))
 }

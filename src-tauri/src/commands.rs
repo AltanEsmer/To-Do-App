@@ -26,6 +26,8 @@ pub struct Task {
     pub recurrence_parent_id: Option<String>,
     pub reminder_minutes_before: Option<i32>,
     pub notification_repeat: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tags: Option<Vec<Tag>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -56,6 +58,37 @@ pub struct Attachment {
     pub created_at: i64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Tag {
+    pub id: String,
+    pub name: String,
+    pub color: Option<String>,
+    pub created_at: i64,
+    pub usage_count: i32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaskRelationship {
+    pub id: String,
+    pub task_id_1: String,
+    pub task_id_2: String,
+    pub relationship_type: String,
+    pub created_at: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CreateTagInput {
+    pub name: String,
+    pub color: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CreateRelationshipInput {
+    pub task_id_1: String,
+    pub task_id_2: String,
+    pub relationship_type: Option<String>,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TaskFilter {
     pub project_id: Option<String>,
@@ -63,6 +96,7 @@ pub struct TaskFilter {
     pub due_before: Option<i64>,
     pub due_after: Option<i64>,
     pub search: Option<String>,
+    pub tag_id: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -120,9 +154,61 @@ fn now() -> i64 {
         .as_secs() as i64
 }
 
+// Helper function to fetch tags for a task
+// Returns empty vector if tags table doesn't exist or on any error
+fn fetch_task_tags(conn: &rusqlite::Connection, task_id: &str) -> Result<Vec<Tag>, String> {
+    // Check if tags table exists first
+    let table_exists: bool = match conn.query_row(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='tags'",
+        [],
+        |row| Ok(row.get::<_, i64>(0)? > 0),
+    ) {
+        Ok(exists) => exists,
+        Err(_) => return Ok(Vec::new()), // If we can't check, return empty
+    };
+    
+    if !table_exists {
+        return Ok(Vec::new()); // Tags table doesn't exist, return empty
+    }
+    
+    // Try to fetch tags, but don't fail if there's an error
+    match conn.prepare(
+        "SELECT t.id, t.name, t.color, t.created_at, t.usage_count 
+         FROM tags t 
+         INNER JOIN task_tags tt ON t.id = tt.tag_id 
+         WHERE tt.task_id = ?1 
+         ORDER BY t.name"
+    ) {
+        Ok(mut stmt) => {
+            match stmt.query_map(params![task_id], |row| {
+                Ok(Tag {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    color: row.get(2)?,
+                    created_at: row.get(3)?,
+                    usage_count: row.get(4)?,
+                })
+            }) {
+                Ok(rows) => {
+                    let mut tags = Vec::new();
+                    for row in rows {
+                        match row {
+                            Ok(tag) => tags.push(tag),
+                            Err(_) => continue, // Skip invalid rows
+                        }
+                    }
+                    Ok(tags)
+                }
+                Err(_) => Ok(Vec::new()), // Query failed, return empty
+            }
+        }
+        Err(_) => Ok(Vec::new()), // Prepare failed, return empty
+    }
+}
+
 // Helper function to fetch a task by ID (assumes lock is already held)
 fn fetch_task(conn: &rusqlite::Connection, id: &str) -> Result<Task, String> {
-    conn.query_row(
+    let mut task = conn.query_row(
         "SELECT id, title, description, due_at, created_at, updated_at, priority, completed_at, project_id, order_index, metadata, recurrence_type, recurrence_interval, recurrence_parent_id, reminder_minutes_before, notification_repeat FROM tasks WHERE id = ?1",
         params![id],
         |row| {
@@ -142,9 +228,15 @@ fn fetch_task(conn: &rusqlite::Connection, id: &str) -> Result<Task, String> {
                 recurrence_parent_id: row.get(13).ok(),
                 reminder_minutes_before: row.get(14).ok().flatten(),
                 notification_repeat: row.get::<_, Option<i32>>(15).unwrap_or(None).map_or(false, |x| x != 0),
+                tags: None,
             })
         },
-    ).map_err(|e| format!("Task not found: {}", e))
+    ).map_err(|e| format!("Task not found: {}", e))?;
+    
+    // Fetch tags for the task
+    task.tags = Some(fetch_task_tags(conn, id)?);
+    
+    Ok(task)
 }
 
 // Task commands
@@ -158,10 +250,10 @@ pub fn get_tasks(
     let mut query = "SELECT id, title, description, due_at, created_at, updated_at, priority, completed_at, project_id, order_index, metadata, recurrence_type, recurrence_interval, recurrence_parent_id, reminder_minutes_before, notification_repeat FROM tasks WHERE 1=1".to_string();
     let mut query_params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
     
-    if let Some(f) = filter {
-        if let Some(project_id) = f.project_id {
+    if let Some(f) = &filter {
+        if let Some(project_id) = &f.project_id {
             query.push_str(" AND project_id = ?");
-            query_params.push(Box::new(project_id));
+            query_params.push(Box::new(project_id.clone()));
         }
         if let Some(completed) = f.completed {
             if completed {
@@ -178,11 +270,27 @@ pub fn get_tasks(
             query.push_str(" AND due_at >= ?");
             query_params.push(Box::new(due_after));
         }
-        if let Some(search) = f.search {
+        if let Some(search) = &f.search {
             query.push_str(" AND (title LIKE ? OR description LIKE ?)");
             let search_pattern = format!("%{}%", search);
             query_params.push(Box::new(search_pattern.clone()));
             query_params.push(Box::new(search_pattern));
+        }
+        if let Some(tag_id) = &f.tag_id {
+            // Only apply tag filter if task_tags table exists
+            let task_tags_exists: bool = db.conn.query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='task_tags'",
+                [],
+                |row| Ok(row.get::<_, i64>(0)? > 0),
+            ).unwrap_or(false);
+            
+            if task_tags_exists {
+                query.push_str(" AND id IN (SELECT task_id FROM task_tags WHERE tag_id = ?)");
+                query_params.push(Box::new(tag_id.clone()));
+            } else {
+                // If table doesn't exist, no tasks will match tag filter, so return empty
+                return Ok(Vec::new());
+            }
         }
     }
     
@@ -206,12 +314,27 @@ pub fn get_tasks(
             recurrence_parent_id: row.get(13).ok(),
             reminder_minutes_before: row.get(14).ok().flatten(),
             notification_repeat: row.get::<_, Option<i32>>(15).unwrap_or(None).map_or(false, |x| x != 0),
+            tags: None,
         })
     }).map_err(|e| format!("Query execution error: {}", e))?;
     
     let mut tasks = Vec::new();
     for row in rows {
-        tasks.push(row.map_err(|e| format!("Row parsing error: {}", e))?);
+        match row {
+            Ok(mut task) => {
+                // Fetch tags for each task - this will return empty vec if tags table doesn't exist
+                match fetch_task_tags(&db.conn, &task.id) {
+                    Ok(tags) => task.tags = Some(tags),
+                    Err(_) => task.tags = Some(Vec::new()), // Fallback to empty if fetch fails
+                }
+                tasks.push(task);
+            }
+            Err(e) => {
+                // Log error but continue processing other tasks
+                eprintln!("Error parsing task row: {}", e);
+                continue;
+            }
+        }
     }
     
     Ok(tasks)
@@ -1078,6 +1201,7 @@ pub fn export_data(
             recurrence_parent_id: row.get(13).ok(),
             reminder_minutes_before: None, // This query doesn't select these fields
             notification_repeat: false,
+            tags: None,
         })
     }).map_err(|e| format!("Query execution error: {}", e))?;
     for row in rows {
@@ -2376,4 +2500,400 @@ pub async fn get_translation(
     } else {
         Ok(cached)
     }
+}
+
+// Tag commands
+#[tauri::command]
+pub fn get_all_tags(db: State<'_, Arc<Mutex<DbConnection>>>) -> Result<Vec<Tag>, String> {
+    let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+    
+    let mut stmt = db.conn.prepare(
+        "SELECT id, name, color, created_at, usage_count FROM tags ORDER BY usage_count DESC, name"
+    ).map_err(|e| format!("Query error: {}", e))?;
+    
+    let rows = stmt.query_map([], |row| {
+        Ok(Tag {
+            id: row.get(0)?,
+            name: row.get(1)?,
+            color: row.get(2)?,
+            created_at: row.get(3)?,
+            usage_count: row.get(4)?,
+        })
+    }).map_err(|e| format!("Query execution error: {}", e))?;
+    
+    let mut tags = Vec::new();
+    for row in rows {
+        tags.push(row.map_err(|e| format!("Row parsing error: {}", e))?);
+    }
+    
+    Ok(tags)
+}
+
+#[tauri::command]
+pub fn get_task_tags(db: State<'_, Arc<Mutex<DbConnection>>>, task_id: String) -> Result<Vec<Tag>, String> {
+    let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+    fetch_task_tags(&db.conn, &task_id)
+}
+
+#[tauri::command]
+pub fn create_tag(db: State<'_, Arc<Mutex<DbConnection>>>, input: CreateTagInput) -> Result<Tag, String> {
+    let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+    
+    // Normalize tag name to lowercase and trim
+    let normalized_name = input.name.trim().to_lowercase();
+    
+    if normalized_name.is_empty() {
+        return Err("Tag name cannot be empty".to_string());
+    }
+    
+    // Check if tag already exists
+    let existing: Option<Tag> = db.conn.query_row(
+        "SELECT id, name, color, created_at, usage_count FROM tags WHERE name = ?1",
+        params![normalized_name],
+        |row| {
+            Ok(Tag {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                color: row.get(2)?,
+                created_at: row.get(3)?,
+                usage_count: row.get(4)?,
+            })
+        },
+    ).ok();
+    
+    if let Some(tag) = existing {
+        return Ok(tag);
+    }
+    
+    // Create new tag
+    let id = uuid::Uuid::new_v4().to_string();
+    let now = now();
+    
+    db.conn.execute(
+        "INSERT INTO tags (id, name, color, created_at, usage_count) VALUES (?1, ?2, ?3, ?4, 0)",
+        params![id.clone(), normalized_name, input.color, now],
+    ).map_err(|e| format!("Failed to create tag: {}", e))?;
+    
+    Ok(Tag {
+        id,
+        name: normalized_name,
+        color: input.color,
+        created_at: now,
+        usage_count: 0,
+    })
+}
+
+#[tauri::command]
+pub fn delete_tag(db: State<'_, Arc<Mutex<DbConnection>>>, tagId: String) -> Result<(), String> {
+    let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+    
+    // CASCADE will handle task_tags deletion
+    db.conn.execute("DELETE FROM tags WHERE id = ?1", params![tagId])
+        .map_err(|e| format!("Failed to delete tag: {}", e))?;
+    
+    Ok(())
+}
+
+#[tauri::command]
+pub fn add_tag_to_task(
+    db: State<'_, Arc<Mutex<DbConnection>>>,
+    task_id: String,
+    tag_id: String,
+) -> Result<(), String> {
+    let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+    
+    let id = uuid::Uuid::new_v4().to_string();
+    let now = now();
+    
+    // Add tag to task (ignore if already exists due to UNIQUE constraint)
+    match db.conn.execute(
+        "INSERT INTO task_tags (id, task_id, tag_id, created_at) VALUES (?1, ?2, ?3, ?4)",
+        params![id, task_id, tag_id.clone(), now],
+    ) {
+        Ok(_) => {
+            // Increment usage count
+            db.conn.execute(
+                "UPDATE tags SET usage_count = usage_count + 1 WHERE id = ?1",
+                params![tag_id],
+            ).map_err(|e| format!("Failed to update tag usage count: {}", e))?;
+            Ok(())
+        }
+        Err(e) => {
+            if e.to_string().contains("UNIQUE constraint failed") {
+                Ok(()) // Tag already added, this is fine
+            } else {
+                Err(format!("Failed to add tag to task: {}", e))
+            }
+        }
+    }
+}
+
+#[tauri::command]
+pub fn remove_tag_from_task(
+    db: State<'_, Arc<Mutex<DbConnection>>>,
+    task_id: String,
+    tag_id: String,
+) -> Result<(), String> {
+    let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+    
+    // Remove tag from task
+    let rows_affected = db.conn.execute(
+        "DELETE FROM task_tags WHERE task_id = ?1 AND tag_id = ?2",
+        params![task_id, tag_id.clone()],
+    ).map_err(|e| format!("Failed to remove tag from task: {}", e))?;
+    
+    // Decrement usage count if a row was deleted
+    if rows_affected > 0 {
+        db.conn.execute(
+            "UPDATE tags SET usage_count = MAX(0, usage_count - 1) WHERE id = ?1",
+            params![tag_id],
+        ).map_err(|e| format!("Failed to update tag usage count: {}", e))?;
+    }
+    
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_suggested_tags(
+    db: State<'_, Arc<Mutex<DbConnection>>>,
+    search: String,
+) -> Result<Vec<Tag>, String> {
+    let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+    
+    let search_pattern = format!("%{}%", search.trim().to_lowercase());
+    
+    let mut stmt = db.conn.prepare(
+        "SELECT id, name, color, created_at, usage_count FROM tags 
+         WHERE name LIKE ?1 
+         ORDER BY usage_count DESC, name 
+         LIMIT 10"
+    ).map_err(|e| format!("Query error: {}", e))?;
+    
+    let rows = stmt.query_map(params![search_pattern], |row| {
+        Ok(Tag {
+            id: row.get(0)?,
+            name: row.get(1)?,
+            color: row.get(2)?,
+            created_at: row.get(3)?,
+            usage_count: row.get(4)?,
+        })
+    }).map_err(|e| format!("Query execution error: {}", e))?;
+    
+    let mut tags = Vec::new();
+    for row in rows {
+        tags.push(row.map_err(|e| format!("Row parsing error: {}", e))?);
+    }
+    
+    Ok(tags)
+}
+
+#[tauri::command]
+pub fn get_tasks_by_tag(
+    db: State<'_, Arc<Mutex<DbConnection>>>,
+    tag_id: String,
+) -> Result<Vec<Task>, String> {
+    let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+    
+    let mut stmt = db.conn.prepare(
+        "SELECT t.id, t.title, t.description, t.due_at, t.created_at, t.updated_at, t.priority, 
+         t.completed_at, t.project_id, t.order_index, t.metadata, t.recurrence_type, 
+         t.recurrence_interval, t.recurrence_parent_id, t.reminder_minutes_before, t.notification_repeat
+         FROM tasks t
+         INNER JOIN task_tags tt ON t.id = tt.task_id
+         WHERE tt.tag_id = ?1
+         ORDER BY t.order_index, t.created_at"
+    ).map_err(|e| format!("Query error: {}", e))?;
+    
+    let rows = stmt.query_map(params![tag_id], |row| {
+        Ok(Task {
+            id: row.get(0)?,
+            title: row.get(1)?,
+            description: row.get(2)?,
+            due_date: row.get(3)?,
+            created_at: row.get(4)?,
+            updated_at: row.get(5)?,
+            priority: row.get(6)?,
+            completed: row.get::<_, Option<i64>>(7)?.is_some(),
+            project_id: row.get(8)?,
+            order_index: row.get(9).unwrap_or(0),
+            recurrence_type: row.get(11).unwrap_or_else(|_| "none".to_string()),
+            recurrence_interval: row.get(12).unwrap_or(1),
+            recurrence_parent_id: row.get(13).ok(),
+            reminder_minutes_before: row.get(14).ok().flatten(),
+            notification_repeat: row.get::<_, Option<i32>>(15).unwrap_or(None).map_or(false, |x| x != 0),
+            tags: None,
+        })
+    }).map_err(|e| format!("Query execution error: {}", e))?;
+    
+    let mut tasks = Vec::new();
+    for row in rows {
+        let mut task = row.map_err(|e| format!("Row parsing error: {}", e))?;
+        task.tags = Some(fetch_task_tags(&db.conn, &task.id)?);
+        tasks.push(task);
+    }
+    
+    Ok(tasks)
+}
+
+#[tauri::command]
+pub fn get_tasks_by_tags(
+    db: State<'_, Arc<Mutex<DbConnection>>>,
+    tag_ids: Vec<String>,
+) -> Result<Vec<Task>, String> {
+    let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+    
+    if tag_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    
+    // Build query with placeholders for each tag_id
+    let placeholders = tag_ids.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
+    let query = format!(
+        "SELECT DISTINCT t.id, t.title, t.description, t.due_at, t.created_at, t.updated_at, t.priority, 
+         t.completed_at, t.project_id, t.order_index, t.metadata, t.recurrence_type, 
+         t.recurrence_interval, t.recurrence_parent_id, t.reminder_minutes_before, t.notification_repeat
+         FROM tasks t
+         INNER JOIN task_tags tt ON t.id = tt.task_id
+         WHERE tt.tag_id IN ({})
+         ORDER BY t.order_index, t.created_at",
+        placeholders
+    );
+    
+    let mut stmt = db.conn.prepare(&query).map_err(|e| format!("Query error: {}", e))?;
+    let params: Vec<&dyn rusqlite::ToSql> = tag_ids.iter().map(|id| id as &dyn rusqlite::ToSql).collect();
+    
+    let rows = stmt.query_map(&params[..], |row| {
+        Ok(Task {
+            id: row.get(0)?,
+            title: row.get(1)?,
+            description: row.get(2)?,
+            due_date: row.get(3)?,
+            created_at: row.get(4)?,
+            updated_at: row.get(5)?,
+            priority: row.get(6)?,
+            completed: row.get::<_, Option<i64>>(7)?.is_some(),
+            project_id: row.get(8)?,
+            order_index: row.get(9).unwrap_or(0),
+            recurrence_type: row.get(11).unwrap_or_else(|_| "none".to_string()),
+            recurrence_interval: row.get(12).unwrap_or(1),
+            recurrence_parent_id: row.get(13).ok(),
+            reminder_minutes_before: row.get(14).ok().flatten(),
+            notification_repeat: row.get::<_, Option<i32>>(15).unwrap_or(None).map_or(false, |x| x != 0),
+            tags: None,
+        })
+    }).map_err(|e| format!("Query execution error: {}", e))?;
+    
+    let mut tasks = Vec::new();
+    for row in rows {
+        let mut task = row.map_err(|e| format!("Row parsing error: {}", e))?;
+        task.tags = Some(fetch_task_tags(&db.conn, &task.id)?);
+        tasks.push(task);
+    }
+    
+    Ok(tasks)
+}
+
+// Task relationship commands
+#[tauri::command]
+pub fn create_task_relationship(
+    db: State<'_, Arc<Mutex<DbConnection>>>,
+    input: CreateRelationshipInput,
+) -> Result<TaskRelationship, String> {
+    let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+    
+    // Prevent self-relationships
+    if input.task_id_1 == input.task_id_2 {
+        return Err("Cannot create relationship between a task and itself".to_string());
+    }
+    
+    let id = uuid::Uuid::new_v4().to_string();
+    let now = now();
+    let relationship_type = input.relationship_type.unwrap_or_else(|| "related".to_string());
+    
+    db.conn.execute(
+        "INSERT INTO task_relationships (id, task_id_1, task_id_2, relationship_type, created_at) 
+         VALUES (?1, ?2, ?3, ?4, ?5)",
+        params![id.clone(), input.task_id_1.clone(), input.task_id_2.clone(), relationship_type.clone(), now],
+    ).map_err(|e| {
+        if e.to_string().contains("UNIQUE constraint failed") {
+            "Relationship already exists between these tasks".to_string()
+        } else {
+            format!("Failed to create task relationship: {}", e)
+        }
+    })?;
+    
+    Ok(TaskRelationship {
+        id,
+        task_id_1: input.task_id_1,
+        task_id_2: input.task_id_2,
+        relationship_type,
+        created_at: now,
+    })
+}
+
+#[tauri::command]
+pub fn delete_task_relationship(
+    db: State<'_, Arc<Mutex<DbConnection>>>,
+    relationship_id: String,
+) -> Result<(), String> {
+    let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+    
+    db.conn.execute(
+        "DELETE FROM task_relationships WHERE id = ?1",
+        params![relationship_id],
+    ).map_err(|e| format!("Failed to delete task relationship: {}", e))?;
+    
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_related_tasks(
+    db: State<'_, Arc<Mutex<DbConnection>>>,
+    task_id: String,
+) -> Result<Vec<Task>, String> {
+    let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+    
+    // Get all tasks related to this task (bidirectional)
+    let mut stmt = db.conn.prepare(
+        "SELECT DISTINCT t.id, t.title, t.description, t.due_at, t.created_at, t.updated_at, t.priority, 
+         t.completed_at, t.project_id, t.order_index, t.metadata, t.recurrence_type, 
+         t.recurrence_interval, t.recurrence_parent_id, t.reminder_minutes_before, t.notification_repeat
+         FROM tasks t
+         WHERE t.id IN (
+            SELECT task_id_2 FROM task_relationships WHERE task_id_1 = ?1
+            UNION
+            SELECT task_id_1 FROM task_relationships WHERE task_id_2 = ?1
+         )
+         ORDER BY t.order_index, t.created_at"
+    ).map_err(|e| format!("Query error: {}", e))?;
+    
+    let rows = stmt.query_map(params![task_id], |row| {
+        Ok(Task {
+            id: row.get(0)?,
+            title: row.get(1)?,
+            description: row.get(2)?,
+            due_date: row.get(3)?,
+            created_at: row.get(4)?,
+            updated_at: row.get(5)?,
+            priority: row.get(6)?,
+            completed: row.get::<_, Option<i64>>(7)?.is_some(),
+            project_id: row.get(8)?,
+            order_index: row.get(9).unwrap_or(0),
+            recurrence_type: row.get(11).unwrap_or_else(|_| "none".to_string()),
+            recurrence_interval: row.get(12).unwrap_or(1),
+            recurrence_parent_id: row.get(13).ok(),
+            reminder_minutes_before: row.get(14).ok().flatten(),
+            notification_repeat: row.get::<_, Option<i32>>(15).unwrap_or(None).map_or(false, |x| x != 0),
+            tags: None,
+        })
+    }).map_err(|e| format!("Query execution error: {}", e))?;
+    
+    let mut tasks = Vec::new();
+    for row in rows {
+        let mut task = row.map_err(|e| format!("Row parsing error: {}", e))?;
+        task.tags = Some(fetch_task_tags(&db.conn, &task.id)?);
+        tasks.push(task);
+    }
+    
+    Ok(tasks)
 }

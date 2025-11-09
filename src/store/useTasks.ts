@@ -22,6 +22,7 @@ export interface Task {
   recurrenceParentId?: string
   reminderMinutesBefore?: number
   notificationRepeat?: boolean
+  tags?: tauriAdapter.Tag[]
 }
 
 interface TasksState {
@@ -34,6 +35,9 @@ interface TasksState {
   toggleComplete: (id: string) => Promise<void>
   deleteTask: (id: string) => Promise<void>
   getTaskById: (id: string) => Task | undefined
+  addTagToTask: (taskId: string, tagId: string) => Promise<void>
+  removeTagFromTask: (taskId: string, tagId: string) => Promise<void>
+  getRelatedTasks: (taskId: string) => Promise<Task[]>
 }
 
 // Convert Rust Task to frontend Task
@@ -54,6 +58,7 @@ function convertTask(task: tauriAdapter.Task): Task {
     recurrenceParentId: task.recurrence_parent_id,
     reminderMinutesBefore: task.reminder_minutes_before,
     notificationRepeat: task.notification_repeat,
+    tags: task.tags,
   }
 }
 
@@ -71,6 +76,7 @@ export const useTasks = create<TasksState>()(
       const tasks = rustTasks.map(convertTask)
       set({ tasks, loading: false })
     } catch (error) {
+      console.error('Error syncing tasks:', error)
       set({
         error: error instanceof Error ? error.message : 'Failed to sync tasks',
         loading: false,
@@ -200,6 +206,50 @@ export const useTasks = create<TasksState>()(
 
   getTaskById: (id) => {
     return get().tasks.find((task) => task.id === id)
+  },
+
+  addTagToTask: async (taskId: string, tagId: string) => {
+    try {
+      await tauriAdapter.addTagToTask(taskId, tagId)
+      // Refresh the task to get updated tags
+      const rustTask = await tauriAdapter.getTask(taskId)
+      const updatedTask = convertTask(rustTask)
+      set((state) => ({
+        tasks: state.tasks.map((task) => (task.id === taskId ? updatedTask : task)),
+      }))
+    } catch (error) {
+      set({
+        error: error instanceof Error ? error.message : 'Failed to add tag to task',
+      })
+      throw error
+    }
+  },
+
+  removeTagFromTask: async (taskId: string, tagId: string) => {
+    try {
+      await tauriAdapter.removeTagFromTask(taskId, tagId)
+      // Refresh the task to get updated tags
+      const rustTask = await tauriAdapter.getTask(taskId)
+      const updatedTask = convertTask(rustTask)
+      set((state) => ({
+        tasks: state.tasks.map((task) => (task.id === taskId ? updatedTask : task)),
+      }))
+    } catch (error) {
+      set({
+        error: error instanceof Error ? error.message : 'Failed to remove tag from task',
+      })
+      throw error
+    }
+  },
+
+  getRelatedTasks: async (taskId: string) => {
+    try {
+      const rustTasks = await tauriAdapter.getRelatedTasks(taskId)
+      return rustTasks.map(convertTask)
+    } catch (error) {
+      console.error('Failed to get related tasks:', error)
+      return []
+    }
   },
     }),
     {

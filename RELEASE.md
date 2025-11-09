@@ -186,3 +186,5 @@ npm run tauri:build -- --target x86_64-unknown-linux-gnu
 3. Plan next version features
 4. Consider setting up automatic updates (Tauri updater)
 
+
+

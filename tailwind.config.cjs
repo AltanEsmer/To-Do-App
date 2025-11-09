@@ -24,6 +24,8 @@ module.exports = {
         foreground: 'var(--color-foreground)',
         card: 'var(--color-card)',
         'card-foreground': 'var(--color-card-foreground)',
+        popover: 'var(--color-popover)',
+        'popover-foreground': 'var(--color-popover-foreground)',
         border: 'var(--color-border)',
         muted: 'var(--color-muted)',
         'muted-foreground': 'var(--color-muted-foreground)',

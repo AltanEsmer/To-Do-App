@@ -7,7 +7,7 @@ import { isDateToday, isOverdue } from './dateHelpers'
  * Custom hook to filter and sort tasks based on current filter state
  */
 export function useFilteredTasks(tasks: Task[]) {
-  const { searchQuery, filter, sortBy } = useTaskFilters()
+  const { searchQuery, filter, sortBy, selectedTags, groupByTag } = useTaskFilters()
 
   return useMemo(() => {
     let filtered = [...tasks]
@@ -20,6 +20,16 @@ export function useFilteredTasks(tasks: Task[]) {
           task.title.toLowerCase().includes(query) ||
           (task.description && task.description.toLowerCase().includes(query))
       )
+    }
+
+    // Apply tag filter (AND logic - task must have ALL selected tags)
+    if (selectedTags.length > 0) {
+      filtered = filtered.filter((task) => {
+        if (!task.tags || task.tags.length === 0) return false
+        return selectedTags.every((selectedTagId) =>
+          task.tags!.some((tag) => tag.id === selectedTagId)
+        )
+      })
     }
 
     // Apply status/date filters
@@ -81,6 +91,30 @@ export function useFilteredTasks(tasks: Task[]) {
     })
 
     return filtered
-  }, [tasks, searchQuery, filter, sortBy])
+  }, [tasks, searchQuery, filter, sortBy, selectedTags, groupByTag])
+}
+
+/**
+ * Group tasks by their tags
+ */
+export function useGroupedByTag(tasks: Task[]) {
+  return useMemo(() => {
+    const grouped = new Map<string, Task[]>()
+    
+    tasks.forEach((task) => {
+      if (task.tags && task.tags.length > 0) {
+        task.tags.forEach((tag) => {
+          const existing = grouped.get(tag.id) || []
+          grouped.set(tag.id, [...existing, task])
+        })
+      } else {
+        // Tasks without tags go to "Untagged" group
+        const existing = grouped.get('__untagged__') || []
+        grouped.set('__untagged__', [...existing, task])
+      }
+    })
+
+    return grouped
+  }, [tasks])
 }
 

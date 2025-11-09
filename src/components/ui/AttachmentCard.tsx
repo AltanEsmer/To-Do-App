@@ -284,7 +284,7 @@ export function AttachmentCard({ attachment, imageUrl, onDelete, onImageLoad }: 
         <Dialog.Root open={previewOpen} onOpenChange={setPreviewOpen}>
           <Dialog.Portal>
             <Dialog.Overlay className="fixed inset-0 z-50 bg-black/50" />
-            <Dialog.Content className="fixed z-50 w-full max-w-2xl rounded-lg border border-border bg-card p-6 shadow-lg left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 max-h-[80vh] flex flex-col">
+            <Dialog.Content className="fixed z-50 w-full max-w-2xl rounded-lg border border-border bg-card p-6 shadow-lg left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 max-h-[80vh] flex flex-col" aria-describedby={undefined}>
               <Dialog.Title className="text-lg font-semibold mb-2">{attachment.filename}</Dialog.Title>
               <div className="flex-1 overflow-y-auto border border-border rounded p-4 bg-muted/30">
                 {loadingText ? (

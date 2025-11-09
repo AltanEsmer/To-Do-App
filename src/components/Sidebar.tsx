@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { Home, ClipboardList, CheckCircle2, Settings, BarChart3, Timer } from 'lucide-react'
+import { Home, ClipboardList, CheckCircle2, Settings, BarChart3, Timer, Hash } from 'lucide-react'
 import clsx from 'clsx'
 import { useTranslation } from 'react-i18next'
 import * as tauriAdapter from '../api/tauriAdapter'
@@ -26,6 +26,11 @@ const navItems: NavItem[] = [
     path: '/completed',
     labelKey: 'nav.completed',
     icon: <CheckCircle2 className="h-5 w-5" />,
+  },
+  {
+    path: '/tags',
+    labelKey: 'nav.tags',
+    icon: <Hash className="h-5 w-5" />,
   },
   {
     path: '/statistics',

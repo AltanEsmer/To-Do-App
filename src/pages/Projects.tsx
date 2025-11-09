@@ -11,6 +11,7 @@ import { SortDropdown } from '../components/SortDropdown'
 import { useFilteredTasks } from '../utils/useFilteredTasks'
 import { useKeyboardShortcuts } from '../utils/useKeyboardShortcuts'
 import { KeyboardShortcutsModal } from '../components/KeyboardShortcutsModal'
+import { useTaskFilters } from '../store/useTaskFilters'
 
 /**
  * Projects page showing all tasks (incomplete and completed)
@@ -18,6 +19,7 @@ import { KeyboardShortcutsModal } from '../components/KeyboardShortcutsModal'
 export function Projects() {
   const { t } = useTranslation()
   const { tasks } = useTasks()
+  const { resetFilters } = useTaskFilters()
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -90,6 +92,10 @@ export function Projects() {
             icon={ListTodo}
             title={t('projects.noTasksMatch')}
             description={t('projects.noTasksMatchDesc')}
+            action={{
+              label: 'Clear Filters',
+              onClick: resetFilters
+            }}
           />
         )}
 

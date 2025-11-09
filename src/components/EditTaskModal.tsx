@@ -138,7 +138,7 @@ export function EditTaskModal({ task, open, onOpenChange }: EditTaskModalProps) 
                   className="fixed inset-0 z-50 bg-black/50"
                 />
               </Dialog.Overlay>
-              <Dialog.Content asChild>
+              <Dialog.Content asChild aria-describedby={undefined}>
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95, y: '-45%' }}
                   animate={{ opacity: 1, scale: 1, y: '-50%' }}
@@ -381,6 +381,7 @@ export function EditTaskModal({ task, open, onOpenChange }: EditTaskModalProps) 
                 </Dialog.Overlay>
                 <Dialog.Content
                   className="fixed z-[60] w-full rounded-2xl border border-border bg-card shadow-xl p-0"
+                  aria-describedby={undefined}
                   style={{
                     left: '50%',
                     top: '50%',

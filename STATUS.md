@@ -12,6 +12,23 @@ A modern desktop todo application built with React + TypeScript frontend and Tau
 - **Task Properties**: Title, description, due date, priority (low/medium/high), completion status
 - **Task Organization**: Projects/categories for grouping tasks
 - **Subtasks**: Nested subtasks support for breaking down tasks
+- **Task Editing**: Dedicated Edit Task Modal for updating existing tasks
+- **Task Search**: Real-time search with debounced input (300ms delay)
+  - Search across task titles and descriptions
+  - Clear search button for quick reset
+- **Task Filtering**: Multiple filter options for task views
+  - All tasks
+  - Active tasks
+  - Completed tasks
+  - Today's tasks
+  - This week's tasks
+  - Overdue tasks
+- **Task Sorting**: Multiple sort options for organizing tasks
+  - Date created
+  - Due date
+  - Priority (low/medium/high)
+  - Title (alphabetical)
+  - Project
 - **Multi-Type File Attachments**: Attach images, PDFs, and text files to tasks
   - Supported formats: Images (PNG, JPG, JPEG, GIF, WEBP), PDF, Text (TXT, MD)
   - File picker dialog with file type filtering
@@ -25,10 +42,18 @@ A modern desktop todo application built with React + TypeScript frontend and Tau
 - **Responsive Layout**: Sidebar navigation with main content area
 - **Modal Dialogs**: 
   - Add Task Modal (centered, properly sized)
+  - Edit Task Modal (centered, properly sized)
   - Task Details Modal (centered, with attachments section)
   - Attachment preview dialogs for PDFs and text files
   - Text file preview with truncation for large files (>50KB)
+  - Keyboard Shortcuts Modal (help dialog)
 - **Accessibility**: Keyboard navigation, ARIA labels, focus management
+- **Keyboard Shortcuts**: Comprehensive keyboard shortcut system
+  - Global shortcuts (Ctrl+Shift combinations)
+  - Navigation shortcuts (N for new task, Ctrl+K for search, etc.)
+  - Task action shortcuts (arrow keys, space, delete, E for edit)
+  - Form shortcuts (Enter to submit, Esc to close)
+  - Help modal accessible via `?` key
 
 ### Pages & Views
 - **Dashboard**: Overview of today's tasks with progress bar
@@ -83,15 +108,35 @@ A modern desktop todo application built with React + TypeScript frontend and Tau
   - Medium priority tasks: 25 XP
   - High priority tasks: 50 XP
   - Pomodoro completion: 5 XP per session
+  - **Backend Integration**: XP data persisted to SQLite database
+  - **XP History**: All XP transactions tracked in database for analytics
+  - **XP Revocation**: XP automatically revoked when tasks are uncompleted
 - **Level System**: Dynamic level calculation based on total XP
   - Formula: `level = floor(sqrt(totalXp / 100)) + 1`
   - XP required increases exponentially per level
+  - Level data persisted in database
+- **Streaks System**: Daily completion streak tracking
+  - Current streak: Tracks consecutive days with task completions
+  - Longest streak: Records the highest streak achieved
+  - Automatic streak calculation on task completion
+  - Streak reset logic: Resets if more than 1 day gap between completions
+  - Streak updates on app startup to account for missed days
+  - Streak toast notifications when streaks are maintained
+- **Badges System**: Achievement badges for milestones
+  - **First Task**: Awarded for completing the first task
+  - **Task Master 100**: Awarded for completing 100 tasks
+  - **Week Warrior**: Awarded for maintaining a 7-day streak
+  - **Level 10**: Awarded for reaching level 10
+  - Badge metadata stored in database
+  - Badge checking and awarding on task completion
+  - Badges modal for viewing all earned badges
+  - Badge cards displayed in progress panel
 - **XP Bar**: Animated progress bar in header showing current level and XP progress
 - **XP Notifications**: Toast notifications when XP is granted
 - **Level-Up Dialog**: Celebratory modal when user levels up
-- **Progress Panel**: Optional component showing level, total XP, and streak stats
+- **Progress Panel**: Optional component showing level, total XP, streak stats, and recent badges
 - **UI Components**: Built with shadcn/ui (Progress, Toast, Dialog, Card, Badge)
-- **State Management**: Zustand store for XP data with localStorage persistence
+- **State Management**: Zustand store for XP data syncing with backend database
 
 ### Pomodoro Timer
 - **Timer Modes**: Three distinct modes for focused work sessions
@@ -164,6 +209,24 @@ A modern desktop todo application built with React + TypeScript frontend and Tau
   - View all templates
 - **Integration**: Templates accessible from Settings page and Add Task Modal
 
+### Internationalization (i18n)
+- **Multi-Language Support**: Full internationalization with i18next
+  - English (en) - Default language
+  - Turkish (tr) - Fully translated
+  - Language detection from browser/system preferences
+  - Language persistence in localStorage
+- **Translation Service**: Backend translation service for task content
+  - Translate task titles and descriptions
+  - Free translation service (no API key required)
+  - Optional Google Translate API key for enhanced quality
+  - Translation caching in database (migration 0009)
+  - User-editable translations with override support
+  - Translation UI in Task Details Modal
+- **Localization Files**: JSON-based translation files
+  - `locales/en/common.json` - English translations
+  - `locales/tr/common.json` - Turkish translations
+  - Easy to extend with additional languages
+
 ---
 
 ## 🔧 Technical Implementation
@@ -179,6 +242,9 @@ A modern desktop todo application built with React + TypeScript frontend and Tau
 - **Framer Motion** for animations
 - **date-fns** for date handling
 - **Recharts** for data visualization (Statistics page)
+- **i18next** for internationalization
+- **react-i18next** for React i18n integration
+- **i18next-browser-languagedetector** for language detection
 - **class-variance-authority** for component variants
 - **tailwind-merge** for Tailwind class merging
 
@@ -264,12 +330,23 @@ To-Do-App/
 │   │   │   ├── LevelUpDialog.tsx  # Level-up celebration dialog
 │   │   │   └── ProgressPanel.tsx # Progress stats panel
 │   │   ├── AddTaskModal.tsx      # Add task dialog
+│   │   ├── EditTaskModal.tsx     # Edit task dialog
 │   │   ├── TaskDetailsModal.tsx  # Task details with attachments
 │   │   ├── TaskCard.tsx          # Task display component with background image support
 │   │   ├── TemplatesModal.tsx    # Task templates management
+│   │   ├── SearchBar.tsx         # Task search component
+│   │   ├── FilterBar.tsx         # Task filter component
+│   │   ├── SortDropdown.tsx      # Task sort component
+│   │   ├── KeyboardShortcutsModal.tsx # Keyboard shortcuts help
+│   │   ├── EmptyState.tsx        # Empty state component
 │   │   ├── Header.tsx            # App header with XP bar
 │   │   ├── Sidebar.tsx           # Navigation sidebar
 │   │   ├── ProgressBar.tsx       # Progress indicator
+│   │   ├── ui/
+│   │   │   ├── BadgesModal.tsx   # Badges display modal
+│   │   │   ├── BadgeCard.tsx     # Badge display card
+│   │   │   ├── StreakToast.tsx   # Streak notification toast
+│   │   │   └── XpHistoryChart.tsx # XP history visualization
 │   │   └── timer/
 │   │       └── Timer.tsx         # Pomodoro timer component
 │   ├── lib/
@@ -283,14 +360,23 @@ To-Do-App/
 │   │   └── Settings.tsx         # Settings page
 │   ├── store/
 │   │   ├── useTasks.ts           # Tasks state management
-│   │   ├── useProjects.ts        # Projects state management
+│   │   ├── useProjects.ts       # Projects state management
 │   │   ├── useXp.ts              # XP and gamification state
 │   │   ├── useTimer.ts           # Pomodoro timer state management
-│   │   └── useTemplates.ts       # Task templates state management
+│   │   ├── useTemplates.ts       # Task templates state management
+│   │   └── useTaskFilters.ts     # Task filtering, sorting, search state
 │   ├── utils/
 │   │   ├── tauri.ts              # Tauri detection & safe invoke
 │   │   ├── dateHelpers.ts        # Date utility functions
-│   │   └── useTheme.ts           # Theme management hook
+│   │   ├── useTheme.ts           # Theme management hook
+│   │   ├── useKeyboardShortcuts.ts # Keyboard shortcuts hook
+│   │   └── useFilteredTasks.ts   # Task filtering utility hook
+│   ├── locales/                  # Internationalization files
+│   │   ├── en/
+│   │   │   └── common.json       # English translations
+│   │   └── tr/
+│   │       └── common.json      # Turkish translations
+│   ├── i18n.ts                   # i18next configuration
 │   ├── App.tsx                   # Main app with routing
 │   └── main.tsx                  # Entry point
 │
@@ -300,7 +386,14 @@ To-Do-App/
 │   │   ├── db.rs                 # Database connection & migrations
 │   │   ├── commands.rs           # All Tauri commands (tasks, projects, attachments, etc.)
 │   │   ├── notifications.rs      # Notification scheduling
-│   │   └── attachments.rs       # File attachment utilities (validation, MIME detection)
+│   │   ├── attachments.rs       # File attachment utilities (validation, MIME detection)
+│   │   └── services/            # Service layer modules
+│   │       ├── gamification_service.rs # XP, streaks, badges logic
+│   │       ├── task_service.rs   # Task business logic
+│   │       ├── project_service.rs # Project business logic
+│   │       ├── template_service.rs # Template business logic
+│   │       ├── stats_service.rs  # Statistics calculations
+│   │       └── translation_service.rs # Translation service
 │   ├── migrations/               # SQL migration files
 │   └── icons/                    # App icons
 │
@@ -315,6 +408,10 @@ To-Do-App/
 
 ### ✅ Working Features
 - All task operations (create, read, update, delete, toggle complete)
+- **Task Editing**: Dedicated Edit Task Modal for updating tasks
+- **Task Search**: Real-time search with debounced input
+- **Task Filtering**: Multiple filter options (all, active, completed, today, week, overdue)
+- **Task Sorting**: Sort by date, priority, title, project
 - Project management
 - Subtasks
 - Multi-type file attachments (images, PDFs, text files)
@@ -325,6 +422,15 @@ To-Do-App/
   - Delete attachments with confirmation
   - Background image selection for task cards
   - Automatic background refresh on deletion
+- **Keyboard Shortcuts**: Comprehensive keyboard shortcut system
+  - Global shortcuts (Ctrl+Shift combinations)
+  - Navigation shortcuts
+  - Task action shortcuts
+  - Help modal (press `?`)
+- **Internationalization**: Multi-language support (English, Turkish)
+  - Language detection and persistence
+  - Task content translation service
+  - Translation caching in database
 - System tray integration
 - System notifications
 - Backup/restore functionality
@@ -333,7 +439,14 @@ To-Do-App/
 - Theme switching
 - Modal dialogs (centered and properly sized)
 - Database persistence with migrations
-- **Gamification system**: XP, levels, progress tracking, level-up celebrations
+- **Gamification system**: Full backend integration
+  - XP system with database persistence
+  - Level system with dynamic calculation
+  - **Streaks**: Current and longest streak tracking with automatic updates
+  - **Badges**: Achievement system with 4 badge types
+  - XP history tracking
+  - Level-up celebrations
+  - Progress panel with badges display
 - **Pomodoro Timer**: Full-featured timer with task integration, automatic cycling, and XP rewards
 - **Statistics Dashboard**: Comprehensive analytics with charts, trends, and productivity insights
 - **Task Templates**: Reusable task templates for quick task creation
@@ -344,10 +457,8 @@ To-Do-App/
 - **Auto-start**: Setting is stored but OS-level implementation is pending
 - **Notifications**: Basic notification system in place; advanced scheduling may need enhancement
 - **Icons**: Placeholder icons; should be replaced with custom app icons
-- **Gamification Backend**: XP system is frontend-only; backend persistence and API integration pending
-- **Streaks**: Streak tracking is stored but not yet calculated/updated
-- **Badges**: Badge system schema exists but not yet implemented
 - **Drag-and-Drop Attachments**: File input works; full drag-and-drop support pending (currently shows helpful message)
+- **Additional Languages**: Only English and Turkish supported; more languages can be added via translation files
 
 ### 🔄 Development Status
 - **Environment**: Fully functional in Tauri desktop mode
@@ -355,35 +466,36 @@ To-Do-App/
 - **Build**: Production builds working
 - **Database**: SQLite with automatic migrations
   - Attachments table with size column (migration 0008)
+  - Gamification tables: user_progress, badges, xp_history (migration 0007)
+  - Translations table for caching task translations (migration 0009)
   - File metadata tracking (filename, path, MIME type, size, created_at)
 - **State Management**: Zustand stores syncing with backend
+- **Internationalization**: i18next with language detection and persistence
 
 ---
 
 ## 📝 Next Steps / Future Enhancements
 
 ### Potential Improvements
-1. **Gamification Backend Integration**: Persist XP data to database, add Rust commands for XP operations
-2. **Streaks System**: Implement daily completion streak tracking and rewards
-3. **Badges System**: Create achievement badges for milestones (e.g., "First Task", "Week Warrior", "Month Master")
-4. **Gamification Statistics**: Analytics page showing XP history, level progression, completion trends
-5. **Custom App Icons**: Replace placeholder icons with branded app icons
-6. **Auto-start Implementation**: Complete OS-level auto-start functionality
-7. **Advanced Notifications**: More sophisticated scheduling and reminder system
-8. **Task Recurrence**: Recurring task support
-9. **Task Search & Filtering**: Enhanced search and filter capabilities
-10. **Task Sorting**: Multiple sort options (date, priority, project, etc.)
-11. **Keyboard Shortcuts**: Global keyboard shortcuts for common actions
-12. **Drag & Drop**: Reorder tasks via drag and drop
-13. **Pomodoro History**: Track and display pomodoro session history and statistics
-14. **Pomodoro Sounds**: Audio notifications for timer start/end events
-15. **Statistics Enhancements**: More detailed analytics, custom date ranges, comparison views
-16. **Template Categories**: Organize templates into categories for better management
-17. **Attachment Improvements**: 
+1. **Gamification Statistics**: Analytics page showing XP history, level progression, completion trends
+2. **Custom App Icons**: Replace placeholder icons with branded app icons
+3. **Auto-start Implementation**: Complete OS-level auto-start functionality
+4. **Advanced Notifications**: More sophisticated scheduling and reminder system
+5. **Task Recurrence**: Recurring task support (schema exists, UI pending)
+6. **Drag & Drop**: Reorder tasks via drag and drop
+7. **Pomodoro History**: Track and display pomodoro session history and statistics
+8. **Pomodoro Sounds**: Audio notifications for timer start/end events
+9. **Statistics Enhancements**: More detailed analytics, custom date ranges, comparison views
+10. **Template Categories**: Organize templates into categories for better management
+11. **Additional Badges**: More badge types (e.g., "Month Master", "Pomodoro Pro", "Night Owl")
+12. **XP History Visualization**: Chart showing XP earned over time
+13. **Attachment Improvements**: 
     - Full drag-and-drop file upload support
     - Image editing/cropping capabilities
     - Attachment versioning
     - Cloud storage integration
+14. **Additional Languages**: Add more language translations (Spanish, French, German, etc.)
+15. **Translation Quality**: Enhanced translation service with better API integration
 
 ---
 
@@ -447,17 +559,45 @@ npm run test
 
 ## 🆕 Recent Updates
 
-### Multi-Type Attachments (Latest)
-- ✅ Extended attachment support to images, PDFs, and text files
-- ✅ File type validation on both frontend and backend
-- ✅ File size tracking in database
-- ✅ AttachmentCard component with type-specific previews
-- ✅ PDF and text file preview dialogs
-- ✅ Download functionality for all attachment types
-- ✅ Background image feature for task cards
-- ✅ Image selection for background display
-- ✅ Automatic background refresh on attachment deletion
-- ✅ Cross-platform file opening using system default applications
-- ✅ Toast notifications for all attachment operations
-- ✅ Tests: Rust tests for file validation, TypeScript tests for attachment handling
+### Search, Filter, Sort, and Edit (Latest)
+- ✅ **Task Search**: Real-time search with debounced input (300ms)
+- ✅ **Task Filtering**: Multiple filter options (all, active, completed, today, week, overdue)
+- ✅ **Task Sorting**: Sort by date created, due date, priority, title, project
+- ✅ **Edit Task Modal**: Dedicated modal for editing existing tasks
+- ✅ **Filter State Management**: Zustand store for managing filter/search/sort state
+- ✅ **Filtered Tasks Hook**: Utility hook for applying filters, search, and sort
+
+### Keyboard Shortcuts (Latest)
+- ✅ **Comprehensive Shortcut System**: Global, navigation, task action, and form shortcuts
+- ✅ **Keyboard Shortcuts Modal**: Help dialog accessible via `?` key
+- ✅ **useKeyboardShortcuts Hook**: Centralized keyboard shortcut management
+- ✅ **Shortcut Categories**: Organized into Global, Navigation, Task Actions, Form Actions
+- ✅ **Focus Management**: Proper focus handling for keyboard navigation
+
+### Internationalization (Latest)
+- ✅ **i18next Integration**: Full internationalization support
+- ✅ **Multi-Language Support**: English and Turkish translations
+- ✅ **Language Detection**: Automatic detection from browser/system
+- ✅ **Language Persistence**: User language preference saved to localStorage
+- ✅ **Translation Service**: Backend service for translating task content
+- ✅ **Translation Caching**: Database table for caching translations (migration 0009)
+- ✅ **User-Editable Translations**: Override translations with custom edits
+- ✅ **Translation UI**: Translation section in Task Details Modal
+
+### Gamification Backend Integration (Latest)
+- ✅ **XP Database Persistence**: XP data stored in SQLite database
+- ✅ **XP History Tracking**: All XP transactions recorded in xp_history table
+- ✅ **XP Revocation**: Automatic XP revocation when tasks are uncompleted
+- ✅ **Streaks System**: Full implementation with automatic calculation
+  - Current streak and longest streak tracking
+  - Automatic updates on task completion
+  - Streak reset logic for missed days
+  - Startup streak validation
+- ✅ **Badges System**: Complete achievement badge system
+  - Four badge types: First Task, Task Master 100, Week Warrior, Level 10
+  - Automatic badge checking and awarding
+  - Badges modal for viewing earned badges
+  - Badge cards in progress panel
+- ✅ **Backend Commands**: Rust commands for all gamification operations
+- ✅ **Service Layer**: Organized gamification logic in service modules
 
