@@ -1,4 +1,5 @@
 use crate::db::DbConnection;
+use crate::services::pomodoro_service;
 use crate::services::stats_service;
 use crate::services::translation_service;
 use rusqlite::params;
@@ -2896,4 +2897,84 @@ pub fn get_related_tasks(
     }
     
     Ok(tasks)
+}
+
+// Pomodoro session commands
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CreatePomodoroSessionInput {
+    pub task_id: Option<String>,
+    pub started_at: i64,
+    pub completed_at: i64,
+    pub duration_seconds: i32,
+    pub mode: String,
+    pub was_completed: bool,
+    pub task_completed: bool,
+}
+
+#[tauri::command]
+pub fn create_pomodoro_session(
+    db: State<'_, Arc<Mutex<DbConnection>>>,
+    input: CreatePomodoroSessionInput,
+) -> Result<pomodoro_service::PomodoroSession, String> {
+    let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+    pomodoro_service::create_pomodoro_session(
+        &db.conn,
+        input.task_id,
+        input.started_at,
+        input.completed_at,
+        input.duration_seconds,
+        input.mode,
+        input.was_completed,
+        input.task_completed,
+    )
+    .map_err(|e| format!("Failed to create pomodoro session: {}", e))
+}
+
+#[tauri::command]
+pub fn get_pomodoro_stats(
+    db: State<'_, Arc<Mutex<DbConnection>>>,
+    start_date: Option<i64>,
+    end_date: Option<i64>,
+) -> Result<pomodoro_service::PomodoroStats, String> {
+    let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+    pomodoro_service::get_pomodoro_stats(&db.conn, start_date, end_date)
+        .map_err(|e| format!("Failed to get pomodoro stats: {}", e))
+}
+
+#[tauri::command]
+pub fn get_daily_pomodoro_stats(
+    db: State<'_, Arc<Mutex<DbConnection>>>,
+    start_date: i64,
+    end_date: i64,
+) -> Result<Vec<pomodoro_service::DailyPomodoroStats>, String> {
+    let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+    pomodoro_service::get_daily_stats(&db.conn, start_date, end_date)
+        .map_err(|e| format!("Failed to get daily pomodoro stats: {}", e))
+}
+
+#[tauri::command]
+pub fn get_best_focus_times(
+    db: State<'_, Arc<Mutex<DbConnection>>>,
+) -> Result<Vec<pomodoro_service::BestFocusTime>, String> {
+    let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+    pomodoro_service::get_best_focus_times(&db.conn)
+        .map_err(|e| format!("Failed to get best focus times: {}", e))
+}
+
+#[tauri::command]
+pub fn get_task_completion_rates(
+    db: State<'_, Arc<Mutex<DbConnection>>>,
+) -> Result<Vec<pomodoro_service::TaskCompletionRate>, String> {
+    let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+    pomodoro_service::get_task_completion_rates(&db.conn)
+        .map_err(|e| format!("Failed to get task completion rates: {}", e))
+}
+
+#[tauri::command]
+pub fn get_pomodoro_streak(
+    db: State<'_, Arc<Mutex<DbConnection>>>,
+) -> Result<pomodoro_service::PomodoroStreak, String> {
+    let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+    pomodoro_service::get_pomodoro_streak(&db.conn)
+        .map_err(|e| format!("Failed to get pomodoro streak: {}", e))
 }

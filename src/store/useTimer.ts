@@ -150,6 +150,25 @@ export const useTimer = create<TimerState>()(
           
           if (newTimeLeft <= 0) {
             // Timer finished
+            const startedAtSeconds = Math.floor(state.startTime / 1000)
+            const completedAtSeconds = Math.floor(now / 1000)
+            const durationSeconds = state.initialTimeLeft
+            
+            // Record pomodoro session
+            try {
+              await tauriAdapter.createPomodoroSession(
+                state.activeTaskId,
+                startedAtSeconds,
+                completedAtSeconds,
+                durationSeconds,
+                state.mode,
+                true, // was_completed
+                false // task_completed - will be updated when task is marked complete
+              )
+            } catch (error) {
+              console.error('Failed to record pomodoro session:', error)
+            }
+            
             set({ 
               status: 'idle',
               timeLeft: 0,

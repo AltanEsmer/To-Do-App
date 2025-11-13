@@ -700,3 +700,134 @@ export async function deleteTaskRelationship(relationshipId: string): Promise<vo
 export async function getRelatedTasks(taskId: string): Promise<Task[]> {
   return safeInvoke<Task[]>('get_related_tasks', { taskId }, () => Promise.resolve([]))
 }
+// Pomodoro session types
+export interface PomodoroSession {
+  id: string
+  user_id: string
+  task_id?: string
+  started_at: number
+  completed_at: number
+  duration_seconds: number
+  mode: string
+  was_completed: boolean
+  task_completed: boolean
+  created_at: number
+}
+
+export interface PomodoroStats {
+  total_sessions: number
+  total_duration_minutes: number
+  completed_sessions: number
+  average_duration_minutes: number
+  sessions_by_mode: ModeStats[]
+}
+
+export interface ModeStats {
+  mode: string
+  count: number
+  total_duration_minutes: number
+}
+
+export interface DailyPomodoroStats {
+  date: string
+  session_count: number
+  total_duration_minutes: number
+  completed_count: number
+}
+
+export interface BestFocusTime {
+  hour: number
+  session_count: number
+  average_duration_minutes: number
+  completion_rate: number
+}
+
+export interface TaskCompletionRate {
+  task_id: string
+  task_title: string
+  pomodoro_count: number
+  completion_rate: number
+}
+
+export interface PomodoroStreak {
+  current_streak: number
+  longest_streak: number
+  last_session_date?: number
+}
+
+// Pomodoro session commands
+export async function createPomodoroSession(
+  taskId: string | null,
+  startedAt: number,
+  completedAt: number,
+  durationSeconds: number,
+  mode: string,
+  wasCompleted: boolean,
+  taskCompleted: boolean
+): Promise<PomodoroSession> {
+  return safeInvoke<PomodoroSession>(
+    'create_pomodoro_session',
+    {
+      input: {
+        task_id: taskId,
+        started_at: startedAt,
+        completed_at: completedAt,
+        duration_seconds: durationSeconds,
+        mode,
+        was_completed: wasCompleted,
+        task_completed: taskCompleted,
+      }
+    },
+    () => {
+      throw new Error('Tauri not available - cannot create pomodoro session in browser mode')
+    }
+  )
+}
+
+export async function getPomodoroStats(
+  startDate?: number,
+  endDate?: number
+): Promise<PomodoroStats> {
+  return safeInvoke<PomodoroStats>(
+    'get_pomodoro_stats',
+    { start_date: startDate || null, end_date: endDate || null },
+    () => ({
+      total_sessions: 0,
+      total_duration_minutes: 0,
+      completed_sessions: 0,
+      average_duration_minutes: 0,
+      sessions_by_mode: [],
+    })
+  )
+}
+
+export async function getDailyPomodoroStats(
+  startDate: number,
+  endDate: number
+): Promise<DailyPomodoroStats[]> {
+  return safeInvoke<DailyPomodoroStats[]>(
+    'get_daily_pomodoro_stats',
+    { start_date: startDate, end_date: endDate },
+    () => Promise.resolve([])
+  )
+}
+
+export async function getBestFocusTimes(): Promise<BestFocusTime[]> {
+  return safeInvoke<BestFocusTime[]>('get_best_focus_times', undefined, () =>
+    Promise.resolve([])
+  )
+}
+
+export async function getTaskCompletionRates(): Promise<TaskCompletionRate[]> {
+  return safeInvoke<TaskCompletionRate[]>('get_task_completion_rates', undefined, () =>
+    Promise.resolve([])
+  )
+}
+
+export async function getPomodoroStreak(): Promise<PomodoroStreak> {
+  return safeInvoke<PomodoroStreak>('get_pomodoro_streak', undefined, () => ({
+    current_streak: 0,
+    longest_streak: 0,
+    last_session_date: undefined,
+  }))
+}

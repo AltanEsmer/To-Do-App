@@ -204,6 +204,12 @@ fn main() {
             commands::create_task_relationship,
             commands::delete_task_relationship,
             commands::get_related_tasks,
+            commands::create_pomodoro_session,
+            commands::get_pomodoro_stats,
+            commands::get_daily_pomodoro_stats,
+            commands::get_best_focus_times,
+            commands::get_task_completion_rates,
+            commands::get_pomodoro_streak,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

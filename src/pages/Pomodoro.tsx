@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useTimer } from '../store/useTimer'
 import { useTasks } from '../store/useTasks'
 import { Timer } from '../components/timer/Timer'
+import { PomodoroStatsDisplay } from '../components/timer/PomodoroStats'
 import {
   Dialog,
   DialogContent,
@@ -11,7 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../components/ui/dialog'
-import { Target, CheckCircle2 } from 'lucide-react'
+import { Target, CheckCircle2, BarChart3 } from 'lucide-react'
 
 /**
  * Pomodoro timer page with task integration
@@ -21,6 +22,7 @@ export function Pomodoro() {
   const { activeTaskId, setActiveTask, mode, status, cycles, loadSettings } = useTimer()
   const { tasks, toggleComplete } = useTasks()
   const [completionDialogOpen, setCompletionDialogOpen] = useState(false)
+  const [showStats, setShowStats] = useState(false)
   const previousStateRef = useRef({ mode, status })
 
   // Load settings on mount
@@ -71,10 +73,25 @@ export function Pomodoro() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-foreground">{t('pomodoro.title')}</h2>
-        <p className="mt-1 text-sm text-muted-foreground">{t('pomodoro.subtitle')}</p>
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-foreground">{t('pomodoro.title')}</h2>
+          <p className="mt-1 text-sm text-muted-foreground">{t('pomodoro.subtitle')}</p>
+        </div>
+        <button
+          onClick={() => setShowStats(!showStats)}
+          className="focus-ring flex items-center gap-2 rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+        >
+          <BarChart3 className="h-4 w-4" />
+          {showStats ? 'Hide Stats' : 'Show Stats'}
+        </button>
       </div>
+
+      {showStats && (
+        <div className="mb-6">
+          <PomodoroStatsDisplay />
+        </div>
+      )}
 
       <div className="flex flex-1 flex-col items-center justify-center space-y-8">
         {/* Timer Display */}

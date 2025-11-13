@@ -397,6 +397,61 @@ fn run_migrations(conn: &Connection, app_handle: &tauri::AppHandle) -> anyhow::R
         }
     }
     
+    // Ensure Pomodoro sessions and streaks tables exist (fallback if migration 0011 wasn't applied)
+    {
+        let pomodoro_sessions_exists: bool = conn.query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='pomodoro_sessions'",
+            [],
+            |row| Ok(row.get::<_, i64>(0)? > 0),
+        )?;
+        
+        if !pomodoro_sessions_exists {
+            let now = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs() as i64;
+            
+            conn.execute_batch(
+                "CREATE TABLE IF NOT EXISTS pomodoro_sessions (
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL DEFAULT 'default',
+                    task_id TEXT,
+                    started_at INTEGER NOT NULL,
+                    completed_at INTEGER NOT NULL,
+                    duration_seconds INTEGER NOT NULL,
+                    mode TEXT NOT NULL DEFAULT 'pomodoro',
+                    was_completed INTEGER NOT NULL DEFAULT 1,
+                    task_completed INTEGER NOT NULL DEFAULT 0,
+                    created_at INTEGER NOT NULL,
+                    FOREIGN KEY (user_id) REFERENCES user_progress(id) ON DELETE CASCADE,
+                    FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE SET NULL
+                );
+                CREATE TABLE IF NOT EXISTS pomodoro_streaks (
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL DEFAULT 'default',
+                    current_streak INTEGER NOT NULL DEFAULT 0,
+                    longest_streak INTEGER NOT NULL DEFAULT 0,
+                    last_session_date INTEGER,
+                    created_at INTEGER NOT NULL,
+                    updated_at INTEGER NOT NULL,
+                    FOREIGN KEY (user_id) REFERENCES user_progress(id) ON DELETE CASCADE
+                );
+                CREATE INDEX IF NOT EXISTS idx_pomodoro_sessions_user_id ON pomodoro_sessions(user_id);
+                CREATE INDEX IF NOT EXISTS idx_pomodoro_sessions_task_id ON pomodoro_sessions(task_id);
+                CREATE INDEX IF NOT EXISTS idx_pomodoro_sessions_completed_at ON pomodoro_sessions(completed_at);
+                CREATE INDEX IF NOT EXISTS idx_pomodoro_sessions_started_at ON pomodoro_sessions(started_at);
+                CREATE INDEX IF NOT EXISTS idx_pomodoro_sessions_mode ON pomodoro_sessions(mode);
+                CREATE INDEX IF NOT EXISTS idx_pomodoro_streaks_user_id ON pomodoro_streaks(user_id);"
+            ).map_err(|e| anyhow::anyhow!("Failed to create Pomodoro tables: {}", e))?;
+            
+            // Initialize default Pomodoro streak record
+            conn.execute(
+                "INSERT OR IGNORE INTO pomodoro_streaks (id, user_id, current_streak, longest_streak, created_at, updated_at) VALUES ('default', 'default', 0, 0, ?1, ?2)",
+                params![now, now],
+            ).map_err(|e| anyhow::anyhow!("Failed to initialize Pomodoro streak: {}", e))?;
+        }
+    }
+    
     // Fallback: if no migrations were applied and tables don't exist, create them directly
     if !tables_exist && applied.is_empty() {
         // Create tables directly as fallback
