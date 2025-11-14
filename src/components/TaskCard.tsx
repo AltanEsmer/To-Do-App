@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Check, X, Target, Link2 } from 'lucide-react'
+import { Check, X, Target, Link2, Repeat, Calendar } from 'lucide-react'
 import { useTasks, Task } from '../store/useTasks'
 import { useTimer } from '../store/useTimer'
-import { formatTaskDate, isOverdue } from '../utils/dateHelpers'
+import { formatTaskDate, isOverdue, getNextOccurrenceDate, formatRecurrencePattern } from '../utils/dateHelpers'
 import { TaskDetailsModal } from './TaskDetailsModal'
 import clsx from 'clsx'
 import * as Checkbox from '@radix-ui/react-checkbox'
@@ -210,6 +210,23 @@ export function TaskCard({ task }: TaskCardProps) {
             >
               {formatTaskDate(task.dueDate)}
             </span>
+          )}
+          {task.recurrenceType !== 'none' && (
+            <div className="flex items-center gap-1.5">
+              <Repeat className="h-3 w-3 text-primary-500" />
+              <span className="text-xs text-primary-600 dark:text-primary-400">
+                {formatRecurrencePattern(task.recurrenceType, task.recurrenceInterval)}
+              </span>
+              {task.dueDate && getNextOccurrenceDate(task.dueDate, task.recurrenceType, task.recurrenceInterval) && (
+                <>
+                  <span className="text-xs text-muted-foreground">•</span>
+                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <Calendar className="h-3 w-3" />
+                    Next: {formatTaskDate(getNextOccurrenceDate(task.dueDate, task.recurrenceType, task.recurrenceInterval)!)}
+                  </span>
+                </>
+              )}
+            </div>
           )}
           <span
             className={clsx(

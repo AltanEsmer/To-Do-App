@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Bell, Edit, Upload, Languages, ChevronDown, ChevronUp } from 'lucide-react'
+import { Bell, Edit, Upload, Languages, ChevronDown, ChevronUp, Repeat, Calendar } from 'lucide-react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { Task, useTasks } from '../store/useTasks'
 import * as tauriAdapter from '../api/tauriAdapter'
@@ -17,6 +17,7 @@ import { TagInput } from './TagInput'
 import { RelatedTasksPanel } from './RelatedTasksPanel'
 import { TagBadge } from './TagBadge'
 import { useTags } from '../store/useTags'
+import { getNextOccurrenceDate, formatRecurrencePattern, formatTaskDate } from '../utils/dateHelpers'
 
 interface TaskDetailsModalProps {
   task: Task | null
@@ -401,6 +402,32 @@ export function TaskDetailsModal({ task, open, onOpenChange }: TaskDetailsModalP
                         <div>
                           <h4 className="mb-2 text-sm font-medium text-foreground">{t('task.description')}</h4>
                           <p className="text-sm text-muted-foreground">{currentTask.description}</p>
+                        </div>
+                      )}
+
+                      {/* Recurrence Section */}
+                      {currentTask.recurrenceType !== 'none' && (
+                        <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-4">
+                          <div className="flex items-center gap-2">
+                            <Repeat className="h-4 w-4 text-primary-500" />
+                            <h4 className="text-sm font-medium text-foreground">Recurrence</h4>
+                          </div>
+                          <div className="space-y-1">
+                            <p className="text-sm text-muted-foreground">
+                              {formatRecurrencePattern(currentTask.recurrenceType, currentTask.recurrenceInterval)}
+                            </p>
+                            {currentTask.dueDate && getNextOccurrenceDate(currentTask.dueDate, currentTask.recurrenceType, currentTask.recurrenceInterval) && (
+                              <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                <Calendar className="h-3 w-3" />
+                                Next occurrence: {formatTaskDate(getNextOccurrenceDate(currentTask.dueDate, currentTask.recurrenceType, currentTask.recurrenceInterval)!)}
+                              </p>
+                            )}
+                            {currentTask.recurrenceParentId && (
+                              <p className="text-xs text-muted-foreground italic">
+                                This is a recurring instance
+                              </p>
+                            )}
+                          </div>
                         </div>
                       )}
 

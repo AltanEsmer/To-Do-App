@@ -1,5 +1,5 @@
 import { forwardRef } from 'react'
-import { Filter } from 'lucide-react'
+import { Filter, X } from 'lucide-react'
 import clsx from 'clsx'
 import { useTaskFilters, FilterType } from '../store/useTaskFilters'
 
@@ -25,7 +25,7 @@ interface FilterBarProps {
  * Filter bar component for task filtering
  */
 export const FilterBar = forwardRef<HTMLButtonElement, FilterBarProps>(({ className = '' }, ref) => {
-  const { filter, setFilter } = useTaskFilters()
+  const { filter, setFilter, resetFilters } = useTaskFilters()
 
   return (
     <div className={`flex items-center gap-2 ${className}`}>
@@ -47,6 +47,14 @@ export const FilterBar = forwardRef<HTMLButtonElement, FilterBarProps>(({ classN
             {option.label}
           </button>
         ))}
+        <button
+          onClick={resetFilters}
+          className="rounded-lg px-3 py-1.5 text-sm font-medium transition-all duration-200 bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground flex items-center gap-1"
+          aria-label="Clear all filters"
+        >
+          <X className="h-3.5 w-3.5" />
+          Clear
+        </button>
       </div>
     </div>
   )

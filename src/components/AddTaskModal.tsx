@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import * as Dialog from '@radix-ui/react-dialog'
-import { FileText } from 'lucide-react'
+import { FileText, Repeat } from 'lucide-react'
 import { useTasks, TaskPriority, RecurrenceType } from '../store/useTasks'
 import { useKeyboardShortcuts } from '../utils/useKeyboardShortcuts'
 import { TemplatesModal } from './TemplatesModal'
 import * as tauriAdapter from '../api/tauriAdapter'
+import { getNextOccurrenceDate, formatRecurrencePattern, formatTaskDate } from '../utils/dateHelpers'
 
 interface AddTaskModalProps {
   open: boolean
@@ -231,8 +232,9 @@ export function AddTaskModal({ open, onOpenChange }: AddTaskModalProps) {
                           </div>
                         </div>
 
-                        <div>
-                          <label htmlFor="task-recurrence" className="mb-1 block text-sm font-medium text-foreground">
+                        <div className="space-y-3">
+                          <label className="flex items-center gap-2 text-sm font-medium text-foreground">
+                            <Repeat className="h-4 w-4 text-primary-500" />
                             Recurrence
                           </label>
                           <div className="grid grid-cols-2 gap-4">
@@ -242,7 +244,7 @@ export function AddTaskModal({ open, onOpenChange }: AddTaskModalProps) {
                               onChange={(e) => setRecurrenceType(e.target.value as RecurrenceType)}
                               className="focus-ring w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
                             >
-                              <option value="none">None</option>
+                              <option value="none">No recurrence</option>
                               <option value="daily">Daily</option>
                               <option value="weekly">Weekly</option>
                               <option value="monthly">Monthly</option>
@@ -259,9 +261,19 @@ export function AddTaskModal({ open, onOpenChange }: AddTaskModalProps) {
                               />
                             )}
                           </div>
-                          {recurrenceType !== 'none' && (
-                            <p className="mt-1 text-xs text-muted-foreground">
-                              Repeats every {recurrenceInterval} {recurrenceType === 'daily' ? 'day' : recurrenceType === 'weekly' ? 'week' : 'month'}{recurrenceInterval > 1 ? 's' : ''}
+                          {recurrenceType !== 'none' && dueDate && (
+                            <div className="rounded-lg border border-primary-200 bg-primary-50 p-3 dark:border-primary-800 dark:bg-primary-950">
+                              <p className="text-xs text-primary-600 dark:text-primary-400">
+                                {formatRecurrencePattern(recurrenceType, recurrenceInterval)}
+                                {getNextOccurrenceDate(new Date(dueDate), recurrenceType, recurrenceInterval) && (
+                                  <> • Next: {formatTaskDate(getNextOccurrenceDate(new Date(dueDate), recurrenceType, recurrenceInterval)!)}</>
+                                )}
+                              </p>
+                            </div>
+                          )}
+                          {recurrenceType !== 'none' && !dueDate && (
+                            <p className="text-xs text-muted-foreground">
+                              Set a due date to preview recurrence pattern
                             </p>
                           )}
                         </div>
