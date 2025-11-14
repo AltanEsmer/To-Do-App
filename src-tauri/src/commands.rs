@@ -2811,6 +2811,13 @@ pub fn create_task_relationship(
     let now = now();
     let relationship_type = input.relationship_type.unwrap_or_else(|| "related".to_string());
     
+    // Check for circular dependencies if relationship type is 'blocks'
+    if relationship_type == "blocks" {
+        if check_circular_dependency_internal(&db.conn, &input.task_id_1, &input.task_id_2)? {
+            return Err("Cannot create blocking relationship: would create circular dependency".to_string());
+        }
+    }
+    
     db.conn.execute(
         "INSERT INTO task_relationships (id, task_id_1, task_id_2, relationship_type, created_at) 
          VALUES (?1, ?2, ?3, ?4, ?5)",
@@ -2865,6 +2872,144 @@ pub fn get_related_tasks(
             UNION
             SELECT task_id_1 FROM task_relationships WHERE task_id_2 = ?1
          )
+         ORDER BY t.order_index, t.created_at"
+    ).map_err(|e| format!("Query error: {}", e))?;
+    
+    let rows = stmt.query_map(params![task_id], |row| {
+        Ok(Task {
+            id: row.get(0)?,
+            title: row.get(1)?,
+            description: row.get(2)?,
+            due_date: row.get(3)?,
+            created_at: row.get(4)?,
+            updated_at: row.get(5)?,
+            priority: row.get(6)?,
+            completed: row.get::<_, Option<i64>>(7)?.is_some(),
+            project_id: row.get(8)?,
+            order_index: row.get(9).unwrap_or(0),
+            recurrence_type: row.get(11).unwrap_or_else(|_| "none".to_string()),
+            recurrence_interval: row.get(12).unwrap_or(1),
+            recurrence_parent_id: row.get(13).ok(),
+            reminder_minutes_before: row.get(14).ok().flatten(),
+            notification_repeat: row.get::<_, Option<i32>>(15).unwrap_or(None).map_or(false, |x| x != 0),
+            tags: None,
+        })
+    }).map_err(|e| format!("Query execution error: {}", e))?;
+    
+    let mut tasks = Vec::new();
+    for row in rows {
+        let mut task = row.map_err(|e| format!("Row parsing error: {}", e))?;
+        task.tags = Some(fetch_task_tags(&db.conn, &task.id)?);
+        tasks.push(task);
+    }
+    
+    Ok(tasks)
+}
+
+// Helper function to check circular dependencies
+fn check_circular_dependency_internal(
+    conn: &rusqlite::Connection,
+    blocking_task_id: &str,
+    blocked_task_id: &str,
+) -> Result<bool, String> {
+    // Check if adding this relationship would create a cycle
+    // Use recursive CTE to traverse the dependency graph starting from blocked_task_id
+    // If we can reach blocking_task_id, then creating this relationship would create a cycle
+    let query = "
+        WITH RECURSIVE dependency_chain(task_id, depth) AS (
+            SELECT ?1 AS task_id, 0 AS depth
+            UNION ALL
+            SELECT tr.task_id_1, dc.depth + 1
+            FROM task_relationships tr
+            INNER JOIN dependency_chain dc ON tr.task_id_2 = dc.task_id
+            WHERE tr.relationship_type = 'blocks' AND dc.depth < 100
+        )
+        SELECT COUNT(*) FROM dependency_chain WHERE task_id = ?2
+    ";
+    
+    let count: i64 = conn.query_row(
+        query,
+        params![blocked_task_id, blocking_task_id],
+        |row| row.get(0),
+    ).map_err(|e| format!("Failed to check circular dependency: {}", e))?;
+    
+    Ok(count > 0)
+}
+
+#[tauri::command]
+pub fn check_circular_dependency(
+    db: State<'_, Arc<Mutex<DbConnection>>>,
+    blocking_task_id: String,
+    blocked_task_id: String,
+) -> Result<bool, String> {
+    let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+    check_circular_dependency_internal(&db.conn, &blocking_task_id, &blocked_task_id)
+}
+
+#[tauri::command]
+pub fn get_blocking_tasks(
+    db: State<'_, Arc<Mutex<DbConnection>>>,
+    task_id: String,
+) -> Result<Vec<Task>, String> {
+    let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+    
+    // Get tasks that block this task (task_id_1 blocks task_id_2 where task_id_2 = task_id)
+    let mut stmt = db.conn.prepare(
+        "SELECT DISTINCT t.id, t.title, t.description, t.due_at, t.created_at, t.updated_at, t.priority, 
+         t.completed_at, t.project_id, t.order_index, t.metadata, t.recurrence_type, 
+         t.recurrence_interval, t.recurrence_parent_id, t.reminder_minutes_before, t.notification_repeat
+         FROM tasks t
+         INNER JOIN task_relationships tr ON t.id = tr.task_id_1
+         WHERE tr.task_id_2 = ?1 AND tr.relationship_type = 'blocks'
+         ORDER BY t.order_index, t.created_at"
+    ).map_err(|e| format!("Query error: {}", e))?;
+    
+    let rows = stmt.query_map(params![task_id], |row| {
+        Ok(Task {
+            id: row.get(0)?,
+            title: row.get(1)?,
+            description: row.get(2)?,
+            due_date: row.get(3)?,
+            created_at: row.get(4)?,
+            updated_at: row.get(5)?,
+            priority: row.get(6)?,
+            completed: row.get::<_, Option<i64>>(7)?.is_some(),
+            project_id: row.get(8)?,
+            order_index: row.get(9).unwrap_or(0),
+            recurrence_type: row.get(11).unwrap_or_else(|_| "none".to_string()),
+            recurrence_interval: row.get(12).unwrap_or(1),
+            recurrence_parent_id: row.get(13).ok(),
+            reminder_minutes_before: row.get(14).ok().flatten(),
+            notification_repeat: row.get::<_, Option<i32>>(15).unwrap_or(None).map_or(false, |x| x != 0),
+            tags: None,
+        })
+    }).map_err(|e| format!("Query execution error: {}", e))?;
+    
+    let mut tasks = Vec::new();
+    for row in rows {
+        let mut task = row.map_err(|e| format!("Row parsing error: {}", e))?;
+        task.tags = Some(fetch_task_tags(&db.conn, &task.id)?);
+        tasks.push(task);
+    }
+    
+    Ok(tasks)
+}
+
+#[tauri::command]
+pub fn get_blocked_tasks(
+    db: State<'_, Arc<Mutex<DbConnection>>>,
+    task_id: String,
+) -> Result<Vec<Task>, String> {
+    let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+    
+    // Get tasks blocked by this task (task_id_1 blocks task_id_2 where task_id_1 = task_id)
+    let mut stmt = db.conn.prepare(
+        "SELECT DISTINCT t.id, t.title, t.description, t.due_at, t.created_at, t.updated_at, t.priority, 
+         t.completed_at, t.project_id, t.order_index, t.metadata, t.recurrence_type, 
+         t.recurrence_interval, t.recurrence_parent_id, t.reminder_minutes_before, t.notification_repeat
+         FROM tasks t
+         INNER JOIN task_relationships tr ON t.id = tr.task_id_2
+         WHERE tr.task_id_1 = ?1 AND tr.relationship_type = 'blocks'
          ORDER BY t.order_index, t.created_at"
     ).map_err(|e| format!("Query error: {}", e))?;
     

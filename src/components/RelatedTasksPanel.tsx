@@ -63,6 +63,15 @@ export function RelatedTasksPanel({ taskId }: RelatedTasksPanelProps) {
     if (!selectedTaskId) return
 
     try {
+      // Check for circular dependencies if creating a 'blocks' relationship
+      if (relationshipType === 'blocks') {
+        const wouldCreateCycle = await tauriAdapter.checkCircularDependency(taskId, selectedTaskId)
+        if (wouldCreateCycle) {
+          alert('Cannot create this blocking relationship: it would create a circular dependency.')
+          return
+        }
+      }
+
       await tauriAdapter.createTaskRelationship({
         task_id_1: taskId,
         task_id_2: selectedTaskId,
@@ -74,6 +83,7 @@ export function RelatedTasksPanel({ taskId }: RelatedTasksPanelProps) {
       setRelationshipType('related')
     } catch (error) {
       console.error('Failed to create relationship:', error)
+      alert('Failed to create relationship: ' + (error as Error).message)
     }
   }
 

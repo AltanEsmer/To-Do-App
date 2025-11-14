@@ -700,6 +700,19 @@ export async function deleteTaskRelationship(relationshipId: string): Promise<vo
 export async function getRelatedTasks(taskId: string): Promise<Task[]> {
   return safeInvoke<Task[]>('get_related_tasks', { taskId }, () => Promise.resolve([]))
 }
+
+export async function checkCircularDependency(blockingTaskId: string, blockedTaskId: string): Promise<boolean> {
+  return safeInvoke<boolean>('check_circular_dependency', { blockingTaskId, blockedTaskId }, () => Promise.resolve(false))
+}
+
+export async function getBlockingTasks(taskId: string): Promise<Task[]> {
+  return safeInvoke<Task[]>('get_blocking_tasks', { taskId }, () => Promise.resolve([]))
+}
+
+export async function getBlockedTasks(taskId: string): Promise<Task[]> {
+  return safeInvoke<Task[]>('get_blocked_tasks', { taskId }, () => Promise.resolve([]))
+}
+
 // Pomodoro session types
 export interface PomodoroSession {
   id: string

@@ -38,6 +38,10 @@ interface TasksState {
   addTagToTask: (taskId: string, tagId: string) => Promise<void>
   removeTagFromTask: (taskId: string, tagId: string) => Promise<void>
   getRelatedTasks: (taskId: string) => Promise<Task[]>
+  getBlockingTasks: (taskId: string) => Promise<Task[]>
+  getBlockedTasks: (taskId: string) => Promise<Task[]>
+  checkIsBlocked: (taskId: string) => Promise<boolean>
+  checkCircularDependency: (blockingTaskId: string, blockedTaskId: string) => Promise<boolean>
 }
 
 // Convert Rust Task to frontend Task
@@ -249,6 +253,45 @@ export const useTasks = create<TasksState>()(
     } catch (error) {
       console.error('Failed to get related tasks:', error)
       return []
+    }
+  },
+
+  getBlockingTasks: async (taskId: string) => {
+    try {
+      const rustTasks = await tauriAdapter.getBlockingTasks(taskId)
+      return rustTasks.map(convertTask)
+    } catch (error) {
+      console.error('Failed to get blocking tasks:', error)
+      return []
+    }
+  },
+
+  getBlockedTasks: async (taskId: string) => {
+    try {
+      const rustTasks = await tauriAdapter.getBlockedTasks(taskId)
+      return rustTasks.map(convertTask)
+    } catch (error) {
+      console.error('Failed to get blocked tasks:', error)
+      return []
+    }
+  },
+
+  checkIsBlocked: async (taskId: string) => {
+    try {
+      const blockingTasks = await tauriAdapter.getBlockingTasks(taskId)
+      return blockingTasks.some(task => !task.completed)
+    } catch (error) {
+      console.error('Failed to check if task is blocked:', error)
+      return false
+    }
+  },
+
+  checkCircularDependency: async (blockingTaskId: string, blockedTaskId: string) => {
+    try {
+      return await tauriAdapter.checkCircularDependency(blockingTaskId, blockedTaskId)
+    } catch (error) {
+      console.error('Failed to check circular dependency:', error)
+      return false
     }
   },
     }),

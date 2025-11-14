@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Check, X, Target, Link2, Repeat, Calendar } from 'lucide-react'
+import { Check, X, Target, Link2, Repeat, Calendar, Lock } from 'lucide-react'
 import { useTasks, Task } from '../store/useTasks'
 import { useTimer } from '../store/useTimer'
 import { formatTaskDate, isOverdue, getNextOccurrenceDate, formatRecurrencePattern } from '../utils/dateHelpers'
@@ -20,12 +20,14 @@ interface TaskCardProps {
  * Task card component with checkbox, title, due date, and priority indicator
  */
 export function TaskCard({ task }: TaskCardProps) {
-  const { toggleComplete, deleteTask, getRelatedTasks } = useTasks()
+  const { toggleComplete, deleteTask, getRelatedTasks, checkIsBlocked, getBlockingTasks } = useTasks()
   const { setActiveTask, setMode, startTimer } = useTimer()
   const navigate = useNavigate()
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [backgroundImageUrl, setBackgroundImageUrl] = useState<string | null>(null)
   const [hasRelatedTasks, setHasRelatedTasks] = useState(false)
+  const [isBlocked, setIsBlocked] = useState(false)
+  const [blockingTasksCount, setBlockingTasksCount] = useState(0)
   const isOverdueTask = task.dueDate && !task.completed && isOverdue(task.dueDate)
 
   // Load background image attachment
@@ -115,6 +117,26 @@ export function TaskCard({ task }: TaskCardProps) {
     checkRelationships()
   }, [task.id, getRelatedTasks])
 
+  // Check if task is blocked
+  useEffect(() => {
+    const checkBlockingStatus = async () => {
+      try {
+        const blocked = await checkIsBlocked(task.id)
+        setIsBlocked(blocked)
+        if (blocked) {
+          const blockingTasks = await getBlockingTasks(task.id)
+          const incompleteBlocking = blockingTasks.filter(t => !t.completed)
+          setBlockingTasksCount(incompleteBlocking.length)
+        } else {
+          setBlockingTasksCount(0)
+        }
+      } catch (error) {
+        console.error('Failed to check blocking status:', error)
+      }
+    }
+    checkBlockingStatus()
+  }, [task.id, task.completed, checkIsBlocked, getBlockingTasks])
+
   const handleFocus = () => {
     if (task.completed) return
     setActiveTask(task.id)
@@ -166,12 +188,23 @@ export function TaskCard({ task }: TaskCardProps) {
       <div className="relative z-10 flex items-start gap-3 w-full">
       <Checkbox.Root
         checked={task.completed}
+        disabled={isBlocked && !task.completed}
         onCheckedChange={() => {
+          if (isBlocked && !task.completed) {
+            console.warn(`Cannot complete task "${task.title}": blocked by ${blockingTasksCount} incomplete task(s)`)
+            alert(`This task is blocked by ${blockingTasksCount} incomplete task(s). Complete the blocking tasks first.`)
+            return
+          }
           toggleComplete(task.id).catch((error) => {
             console.error('Failed to toggle task:', error)
           })
         }}
-        className="focus-ring mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 border-border bg-background transition-all duration-200 hover:border-primary-400 data-[state=checked]:bg-primary-500 data-[state=checked]:border-primary-500"
+        className={clsx(
+          "focus-ring mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 border-border bg-background transition-all duration-200",
+          isBlocked && !task.completed
+            ? "cursor-not-allowed opacity-50"
+            : "hover:border-primary-400 data-[state=checked]:bg-primary-500 data-[state=checked]:border-primary-500"
+        )}
         aria-label={`Mark "${task.title}" as ${task.completed ? 'incomplete' : 'complete'}`}
       >
         <Checkbox.Indicator asChild>
@@ -239,6 +272,15 @@ export function TaskCard({ task }: TaskCardProps) {
           {hasRelatedTasks && (
             <span className="flex items-center gap-1 text-xs text-muted-foreground" title="Has related tasks">
               <Link2 className="h-3 w-3" />
+            </span>
+          )}
+          {isBlocked && !task.completed && (
+            <span 
+              className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400" 
+              title={`Blocked by ${blockingTasksCount} incomplete task(s)`}
+            >
+              <Lock className="h-3 w-3" />
+              <span>Blocked ({blockingTasksCount})</span>
             </span>
           )}
         </div>
