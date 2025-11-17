@@ -38,6 +38,7 @@
   "nav.dashboard": "Dashboard",
   "nav.allTasks": "All Tasks",
   "nav.completed": "Completed",
+  "nav.kanban": "Kanban",
   "nav.tags": "Tags",
   "nav.statistics": "Statistics",
   "nav.pomodoro": "Pomodoro",

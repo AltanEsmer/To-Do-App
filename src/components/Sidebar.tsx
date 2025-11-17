@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { Home, ClipboardList, CheckCircle2, Settings, BarChart3, Timer, Hash } from 'lucide-react'
+import { Home, ClipboardList, CheckCircle2, Settings, BarChart3, Timer, Hash, Kanban } from 'lucide-react'
 import clsx from 'clsx'
 import { useTranslation } from 'react-i18next'
 import * as tauriAdapter from '../api/tauriAdapter'
@@ -26,6 +26,11 @@ const navItems: NavItem[] = [
     path: '/completed',
     labelKey: 'nav.completed',
     icon: <CheckCircle2 className="h-5 w-5" />,
+  },
+  {
+    path: '/kanban',
+    labelKey: 'nav.kanban',
+    icon: <Kanban className="h-5 w-5" />,
   },
   {
     path: '/tags',
@@ -56,6 +61,7 @@ export function Sidebar() {
   const location = useLocation()
   const { t } = useTranslation()
   const [statisticsVisible, setStatisticsVisible] = useState(true)
+  const [kanbanVisible, setKanbanVisible] = useState(true)
 
   useEffect(() => {
     const loadStatisticsVisibility = async () => {
@@ -63,10 +69,12 @@ export function Sidebar() {
         const settings = await tauriAdapter.getSettings()
         // Default to true if setting doesn't exist (backward compatibility)
         setStatisticsVisible(settings.statistics_visible !== 'false')
+        setKanbanVisible(settings.kanban_visible !== 'false')
       } catch (error) {
-        console.error('Failed to load statistics visibility setting:', error)
+        console.error('Failed to load visibility settings:', error)
         // Default to true on error
         setStatisticsVisible(true)
+        setKanbanVisible(true)
       }
     }
     loadStatisticsVisibility()
@@ -81,10 +89,13 @@ export function Sidebar() {
     }
   }, [])
 
-  // Filter nav items based on statistics visibility setting
+  // Filter nav items based on statistics and kanban visibility settings
   const visibleNavItems = navItems.filter((item) => {
     if (item.path === '/statistics') {
       return statisticsVisible
+    }
+    if (item.path === '/kanban') {
+      return kanbanVisible
     }
     return true
   })

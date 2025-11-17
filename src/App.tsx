@@ -9,6 +9,7 @@ import { Settings } from './pages/Settings'
 import { Statistics } from './pages/Statistics'
 import { Pomodoro } from './pages/Pomodoro'
 import { Tags } from './pages/Tags'
+import { Kanban } from './pages/Kanban'
 import { useTasks } from './store/useTasks'
 import { useTags } from './store/useTags'
 import { useXp } from './store/useXp'
@@ -98,6 +99,7 @@ function App() {
               <Route path="/" element={<Dashboard />} />
               <Route path="/projects" element={<Projects />} />
               <Route path="/completed" element={<Completed />} />
+              <Route path="/kanban" element={<Kanban />} />
               <Route path="/tags" element={<Tags />} />
               <Route path="/statistics" element={<Statistics />} />
               <Route path="/settings" element={<Settings />} />

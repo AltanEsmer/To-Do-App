@@ -6,6 +6,8 @@ export type TaskPriority = 'low' | 'medium' | 'high'
 
 export type RecurrenceType = 'none' | 'daily' | 'weekly' | 'monthly'
 
+export type TaskStatus = 'todo' | 'in_progress' | 'done'
+
 export interface Task {
   id: string
   title: string
@@ -23,6 +25,7 @@ export interface Task {
   reminderMinutesBefore?: number
   notificationRepeat?: boolean
   tags?: tauriAdapter.Tag[]
+  status?: TaskStatus
 }
 
 interface TasksState {
@@ -63,6 +66,7 @@ function convertTask(task: tauriAdapter.Task): Task {
     reminderMinutesBefore: task.reminder_minutes_before,
     notificationRepeat: task.notification_repeat,
     tags: task.tags,
+    status: (task as any).status as TaskStatus || (task.completed ? 'done' : 'todo'),
   }
 }
 
@@ -114,6 +118,20 @@ export const useTasks = create<TasksState>()(
   },
 
   updateTask: async (id, updates) => {
+    // Optimistic update - update UI immediately
+    const previousTasks = get().tasks
+    const taskToUpdate = previousTasks.find(task => task.id === id)
+    
+    if (taskToUpdate) {
+      set((state) => ({
+        tasks: state.tasks.map((task) => 
+          task.id === id 
+            ? { ...task, ...updates, updatedAt: new Date() }
+            : task
+        ),
+      }))
+    }
+
     try {
       const rustTask = await tauriAdapter.updateTask(id, {
         title: updates.title,
@@ -128,10 +146,16 @@ export const useTasks = create<TasksState>()(
         notification_repeat: updates.notificationRepeat,
       })
       const updatedTask = convertTask(rustTask)
+      // Apply the status from optimistic update if it was provided
+      if (updates.status !== undefined) {
+        updatedTask.status = updates.status
+      }
       set((state) => ({
         tasks: state.tasks.map((task) => (task.id === id ? updatedTask : task)),
       }))
     } catch (error) {
+      // Rollback optimistic update on error
+      set({ tasks: previousTasks })
       set({
         error: error instanceof Error ? error.message : 'Failed to update task',
       })
