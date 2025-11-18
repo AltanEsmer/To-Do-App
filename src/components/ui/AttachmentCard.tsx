@@ -1,25 +1,34 @@
 import { useState } from 'react'
-import { FileText, File, Download, Trash2, Eye } from 'lucide-react'
+import { FileText, File, Download, Trash2, Eye, Film, Music, Edit } from 'lucide-react'
 import * as tauriAdapter from '../../api/tauriAdapter'
 import { Card, CardContent } from './card'
 import { Badge } from './badge'
 import { useToast } from './use-toast'
 import { isTauri } from '../../utils/tauri'
 import * as Dialog from '@radix-ui/react-dialog'
+import { ImageViewer } from './ImageViewer'
+import { ImageEditorModal } from './ImageEditorModal'
+import { PdfViewerModal } from './PdfViewerModal'
+import { EnhancedTextViewer } from './EnhancedTextViewer'
 
 interface AttachmentCardProps {
   attachment: tauriAdapter.Attachment
   imageUrl?: string
   onDelete: (id: string) => void
   onImageLoad?: () => void
+  onAttachmentAdded?: (taskId: string, file: File) => Promise<void>
+  taskId?: string
 }
 
-export function AttachmentCard({ attachment, imageUrl, onDelete, onImageLoad }: AttachmentCardProps) {
+export function AttachmentCard({ attachment, imageUrl, onDelete, onImageLoad, onAttachmentAdded, taskId }: AttachmentCardProps) {
   const { toast } = useToast()
   const [previewOpen, setPreviewOpen] = useState(false)
+  const [editorOpen, setEditorOpen] = useState(false)
   const [textContent, setTextContent] = useState<string | null>(null)
   const [loadingText, setLoadingText] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [mediaUrl, setMediaUrl] = useState<string | null>(null)
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null)
 
   const isImage = (): boolean => {
     if (attachment.mime && attachment.mime.startsWith('image/')) {
@@ -41,6 +50,22 @@ export function AttachmentCard({ attachment, imageUrl, onDelete, onImageLoad }: 
     return ['txt', 'md'].includes(ext || '')
   }
 
+  const isVideo = (): boolean => {
+    if (attachment.mime && attachment.mime.startsWith('video/')) {
+      return true
+    }
+    const ext = attachment.filename.split('.').pop()?.toLowerCase()
+    return ['mp4', 'webm', 'mov'].includes(ext || '')
+  }
+
+  const isAudio = (): boolean => {
+    if (attachment.mime && attachment.mime.startsWith('audio/')) {
+      return true
+    }
+    const ext = attachment.filename.split('.').pop()?.toLowerCase()
+    return ['mp3', 'wav', 'ogg'].includes(ext || '')
+  }
+
   const handleOpen = async () => {
     if (!isTauri()) {
       toast({
@@ -52,19 +77,40 @@ export function AttachmentCard({ attachment, imageUrl, onDelete, onImageLoad }: 
     }
 
     try {
-      if (isPDF()) {
-        // Open PDF externally using Tauri command
-        await tauriAdapter.openAttachmentFile(attachment.id)
+      if (isImage() && imageUrl) {
+        setPreviewOpen(true)
+      } else if (isPDF()) {
+        setPreviewOpen(true)
+        if (!pdfUrl) {
+          try {
+            const { appDataDir } = await import('@tauri-apps/api/path')
+            const { join } = await import('@tauri-apps/api/path')
+            const { readBinaryFile } = await import('@tauri-apps/api/fs')
+            const dataDir = await appDataDir()
+            const fullPath = await join(dataDir, attachment.path)
+            const fileData = await readBinaryFile(fullPath)
+            
+            if (fileData && fileData.length > 0) {
+              const blob = new Blob([fileData], { type: 'application/pdf' })
+              const url = URL.createObjectURL(blob)
+              setPdfUrl(url)
+            }
+          } catch (error) {
+            console.error('Failed to load PDF:', error)
+            toast({
+              title: 'Error',
+              description: 'Failed to load PDF file.',
+              variant: 'destructive',
+            })
+          }
+        }
       } else if (isText()) {
-        // Open text in preview dialog
         setPreviewOpen(true)
         if (!textContent && !loadingText) {
           setLoadingText(true)
           try {
             const content = await tauriAdapter.readAttachmentFileContent(attachment.id)
-            // Check if file is large (>50KB)
             if (attachment.size && attachment.size > 50 * 1024) {
-              // Show first 50KB
               const firstPart = content.substring(0, 50 * 1024)
               setTextContent(firstPart + '\n\n... (file truncated, use "Load full file" to see more)')
             } else {
@@ -81,9 +127,32 @@ export function AttachmentCard({ attachment, imageUrl, onDelete, onImageLoad }: 
             setLoadingText(false)
           }
         }
-      } else if (isImage()) {
-        // Open image externally using Tauri command
-        await tauriAdapter.openAttachmentFile(attachment.id)
+      } else if (isVideo() || isAudio()) {
+        setPreviewOpen(true)
+        if (!mediaUrl) {
+          try {
+            const { appDataDir } = await import('@tauri-apps/api/path')
+            const { join } = await import('@tauri-apps/api/path')
+            const { readBinaryFile } = await import('@tauri-apps/api/fs')
+            const dataDir = await appDataDir()
+            const fullPath = await join(dataDir, attachment.path)
+            const fileData = await readBinaryFile(fullPath)
+            
+            if (fileData && fileData.length > 0) {
+              const mimeType = attachment.mime || (isVideo() ? 'video/mp4' : 'audio/mpeg')
+              const blob = new Blob([fileData], { type: mimeType })
+              const url = URL.createObjectURL(blob)
+              setMediaUrl(url)
+            }
+          } catch (error) {
+            console.error('Failed to load media:', error)
+            toast({
+              title: 'Error',
+              description: 'Failed to load media file.',
+              variant: 'destructive',
+            })
+          }
+        }
       }
     } catch (error) {
       console.error('Failed to open attachment:', error)
@@ -180,6 +249,30 @@ export function AttachmentCard({ attachment, imageUrl, onDelete, onImageLoad }: 
     }
   }
 
+  const handleSaveEditedImage = async (blob: Blob, filename: string) => {
+    if (!taskId || !onAttachmentAdded) {
+      toast({
+        title: 'Error',
+        description: 'Cannot save edited image.',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    try {
+      const file = new File([blob], filename, { type: 'image/jpeg' })
+      await onAttachmentAdded(taskId, file)
+      toast({
+        title: 'Success',
+        description: 'Edited image saved as new attachment.',
+        variant: 'default',
+      })
+    } catch (error) {
+      console.error('Failed to save edited image:', error)
+      throw error
+    }
+  }
+
   const formatFileSize = (bytes?: number): string => {
     if (!bytes) return 'Unknown size'
     if (bytes < 1024) return `${bytes} B`
@@ -191,6 +284,8 @@ export function AttachmentCard({ attachment, imageUrl, onDelete, onImageLoad }: 
     if (isImage()) return <Badge variant="secondary">Image</Badge>
     if (isPDF()) return <Badge variant="secondary">PDF</Badge>
     if (isText()) return <Badge variant="secondary">Text</Badge>
+    if (isVideo()) return <Badge variant="secondary">Video</Badge>
+    if (isAudio()) return <Badge variant="secondary">Audio</Badge>
     return <Badge variant="outline">File</Badge>
   }
 
@@ -212,6 +307,14 @@ export function AttachmentCard({ attachment, imageUrl, onDelete, onImageLoad }: 
                     e.currentTarget.style.display = 'none'
                   }}
                 />
+              ) : isVideo() ? (
+                <div className="w-16 h-16 flex items-center justify-center bg-purple-50 dark:bg-purple-900/20 rounded border border-border">
+                  <Film className="h-8 w-8 text-purple-600 dark:text-purple-400" />
+                </div>
+              ) : isAudio() ? (
+                <div className="w-16 h-16 flex items-center justify-center bg-green-50 dark:bg-green-900/20 rounded border border-border">
+                  <Music className="h-8 w-8 text-green-600 dark:text-green-400" />
+                </div>
               ) : isPDF() ? (
                 <div className="w-16 h-16 flex items-center justify-center bg-red-50 dark:bg-red-900/20 rounded border border-border">
                   <File className="h-8 w-8 text-red-600 dark:text-red-400" />
@@ -254,6 +357,16 @@ export function AttachmentCard({ attachment, imageUrl, onDelete, onImageLoad }: 
                   <Eye className="h-3 w-3 mr-1" />
                   View
                 </button>
+                {isImage() && imageUrl && isTauri() && onAttachmentAdded && taskId && (
+                  <button
+                    onClick={() => setEditorOpen(true)}
+                    className="focus-ring flex items-center h-7 px-2 text-xs rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                    aria-label={`Edit ${attachment.filename}`}
+                  >
+                    <Edit className="h-3 w-3 mr-1" />
+                    Edit
+                  </button>
+                )}
                 {isTauri() && (
                   <button
                     onClick={handleDownload}
@@ -279,40 +392,123 @@ export function AttachmentCard({ attachment, imageUrl, onDelete, onImageLoad }: 
         </CardContent>
       </Card>
 
-      {/* Text Preview Dialog */}
-      {isText() && (
-        <Dialog.Root open={previewOpen} onOpenChange={setPreviewOpen}>
+      {/* Image Viewer */}
+      {isImage() && imageUrl && (
+        <ImageViewer
+          imageUrl={imageUrl}
+          filename={attachment.filename}
+          open={previewOpen}
+          onOpenChange={setPreviewOpen}
+          onDownload={handleDownload}
+        />
+      )}
+
+      {/* Image Editor */}
+      {isImage() && imageUrl && (
+        <ImageEditorModal
+          open={editorOpen}
+          onOpenChange={setEditorOpen}
+          imageUrl={imageUrl}
+          filename={attachment.filename}
+          onSave={handleSaveEditedImage}
+        />
+      )}
+
+      {/* PDF Viewer */}
+      {isPDF() && pdfUrl && (
+        <PdfViewerModal
+          open={previewOpen}
+          onOpenChange={(open) => {
+            setPreviewOpen(open)
+            if (!open && pdfUrl) {
+              URL.revokeObjectURL(pdfUrl)
+              setPdfUrl(null)
+            }
+          }}
+          pdfUrl={pdfUrl}
+          filename={attachment.filename}
+          onDownload={handleDownload}
+        />
+      )}
+
+      {/* Enhanced Text Viewer */}
+      {isText() && textContent && (
+        <EnhancedTextViewer
+          open={previewOpen}
+          onOpenChange={setPreviewOpen}
+          content={textContent}
+          filename={attachment.filename}
+          fileSize={attachment.size}
+          onDownload={handleDownload}
+          onLoadFull={attachment.size && attachment.size > 50 * 1024 ? loadFullText : undefined}
+          isPartial={attachment.size ? attachment.size > 50 * 1024 && textContent.includes('... (file truncated') : false}
+        />
+      )}
+
+      {/* Media (Video/Audio) Preview Dialog */}
+      {(isVideo() || isAudio()) && (
+        <Dialog.Root open={previewOpen} onOpenChange={(open) => {
+          setPreviewOpen(open)
+          if (!open && mediaUrl) {
+            URL.revokeObjectURL(mediaUrl)
+            setMediaUrl(null)
+          }
+        }}>
           <Dialog.Portal>
             <Dialog.Overlay className="fixed inset-0 z-50 bg-black/50" />
-            <Dialog.Content className="fixed z-50 w-full max-w-2xl rounded-lg border border-border bg-card p-6 shadow-lg left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 max-h-[80vh] flex flex-col" aria-describedby={undefined}>
-              <Dialog.Title className="text-lg font-semibold mb-2">{attachment.filename}</Dialog.Title>
-              <div className="flex-1 overflow-y-auto border border-border rounded p-4 bg-muted/30">
-                {loadingText ? (
-                  <p className="text-sm text-muted-foreground">Loading...</p>
-                ) : textContent ? (
-                  <pre className="text-sm whitespace-pre-wrap font-mono">{textContent}</pre>
+            <Dialog.Content className="fixed z-50 w-full max-w-3xl rounded-lg border border-border bg-card p-6 shadow-lg left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 max-h-[90vh] flex flex-col" aria-describedby={undefined}>
+              <Dialog.Title className="text-lg font-semibold mb-4">{attachment.filename}</Dialog.Title>
+              <div className="flex-1 flex items-center justify-center bg-black rounded">
+                {mediaUrl ? (
+                  isVideo() ? (
+                    <video 
+                      src={mediaUrl} 
+                      controls 
+                      className="max-w-full max-h-[70vh] rounded"
+                      onError={(e) => {
+                        console.error('Video failed to load:', mediaUrl, attachment)
+                        toast({
+                          title: 'Error',
+                          description: 'Failed to load video file.',
+                          variant: 'destructive',
+                        })
+                      }}
+                    >
+                      Your browser does not support the video element.
+                    </video>
+                  ) : (
+                    <div className="w-full p-8">
+                      <audio 
+                        src={mediaUrl} 
+                        controls 
+                        className="w-full"
+                        onError={(e) => {
+                          console.error('Audio failed to load:', mediaUrl, attachment)
+                          toast({
+                            title: 'Error',
+                            description: 'Failed to load audio file.',
+                            variant: 'destructive',
+                          })
+                        }}
+                      >
+                        Your browser does not support the audio element.
+                      </audio>
+                    </div>
+                  )
                 ) : (
-                  <p className="text-sm text-muted-foreground">No content available</p>
+                  <p className="text-sm text-muted-foreground">Loading media...</p>
                 )}
               </div>
               <div className="flex items-center justify-between mt-4">
-                {attachment.size && attachment.size > 50 * 1024 && textContent && textContent.includes('... (file truncated') && (
-                  <button
-                    onClick={loadFullText}
-                    disabled={loadingText}
-                    className="focus-ring rounded-lg border border-border bg-background px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50"
-                  >
-                    {loadingText ? 'Loading...' : 'Load full file'}
-                  </button>
-                )}
-                <div className="ml-auto">
-                  <button
-                    onClick={() => setPreviewOpen(false)}
-                    className="focus-ring rounded-lg border border-border bg-background px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted"
-                  >
-                    Close
-                  </button>
+                <div className="text-xs text-muted-foreground">
+                  {formatFileSize(attachment.size)}
                 </div>
+                <button
+                  onClick={() => setPreviewOpen(false)}
+                  className="focus-ring rounded-lg border border-border bg-background px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+                >
+                  Close
+                </button>
               </div>
             </Dialog.Content>
           </Dialog.Portal>

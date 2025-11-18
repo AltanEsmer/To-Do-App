@@ -43,6 +43,9 @@ export interface Attachment {
   mime?: string;
   size?: number;
   created_at: number;
+  version?: number;
+  parent_id?: string;
+  is_current?: boolean;
 }
 
 export interface Tag {

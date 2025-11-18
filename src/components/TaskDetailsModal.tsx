@@ -9,6 +9,7 @@ import clsx from 'clsx'
 import { useKeyboardShortcuts } from '../utils/useKeyboardShortcuts'
 import { EditTaskModal } from './EditTaskModal'
 import { AttachmentCard } from './ui/AttachmentCard'
+import { ScreenshotCapture } from './ui/ScreenshotCapture'
 import { useToast } from './ui/use-toast'
 import { useTranslation } from 'react-i18next'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
@@ -32,6 +33,7 @@ export function TaskDetailsModal({ task, open, onOpenChange }: TaskDetailsModalP
   const { t } = useTranslation()
   const [attachments, setAttachments] = useState<tauriAdapter.Attachment[]>([])
   const [imageUrls, setImageUrls] = useState<Map<string, string>>(new Map())
+  const imageUrlsRef = useRef<Map<string, string>>(new Map())
   const [loading, setLoading] = useState(false)
   const [reminderMinutesBefore, setReminderMinutesBefore] = useState<number | null>(null)
   const [notificationRepeat, setNotificationRepeat] = useState(false)
@@ -100,12 +102,10 @@ export function TaskDetailsModal({ task, open, onOpenChange }: TaskDetailsModalP
     if (!currentTask) return
     try {
       // Clean up old blob URLs
-      setImageUrls((prevUrls) => {
-        prevUrls.forEach((url) => {
-          URL.revokeObjectURL(url)
-        })
-        return new Map()
+      imageUrlsRef.current.forEach((url) => {
+        URL.revokeObjectURL(url)
       })
+      imageUrlsRef.current.clear()
       
       const atts = await tauriAdapter.getAttachments(currentTask.id)
       setAttachments(atts)
@@ -120,6 +120,7 @@ export function TaskDetailsModal({ task, open, onOpenChange }: TaskDetailsModalP
           }
         }
       }
+      imageUrlsRef.current = urlMap
       setImageUrls(urlMap)
     } catch (error) {
       console.error('Failed to load attachments:', error)
@@ -141,12 +142,23 @@ export function TaskDetailsModal({ task, open, onOpenChange }: TaskDetailsModalP
 
   // Cleanup blob URLs when component unmounts or modal closes
   useEffect(() => {
-    return () => {
-      imageUrls.forEach((url) => {
+    if (!open) {
+      // Clean up blob URLs when modal closes
+      imageUrlsRef.current.forEach((url) => {
         URL.revokeObjectURL(url)
       })
+      imageUrlsRef.current.clear()
+      setImageUrls(new Map())
     }
-  }, [imageUrls])
+    
+    return () => {
+      // Clean up on unmount
+      imageUrlsRef.current.forEach((url) => {
+        URL.revokeObjectURL(url)
+      })
+      imageUrlsRef.current.clear()
+    }
+  }, [open]) // Only depend on open, not imageUrls
 
   // Refresh task data when edit modal closes
   useEffect(() => {
@@ -184,7 +196,7 @@ export function TaskDetailsModal({ task, open, onOpenChange }: TaskDetailsModalP
     disabled: !open,
   })
 
-  const handleAddAttachment = async (filePath?: string) => {
+  const handleAddAttachment = async (filePath?: string | string[]) => {
     if (!currentTask) return
     if (!isTauri()) {
       toast({
@@ -195,17 +207,19 @@ export function TaskDetailsModal({ task, open, onOpenChange }: TaskDetailsModalP
       return
     }
 
-    let selectedPath = filePath
+    let selectedPaths: string[] = []
 
-    if (!selectedPath) {
+    if (filePath) {
+      selectedPaths = Array.isArray(filePath) ? filePath : [filePath]
+    } else {
       try {
         const { open } = await import('@tauri-apps/api/dialog')
         const selected = await open({
-          multiple: false,
-          title: 'Select file to attach',
+          multiple: true,
+          title: 'Select files to attach',
           filters: [{
             name: 'Supported Files',
-            extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'pdf', 'txt', 'md']
+            extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'pdf', 'txt', 'md', 'mp4', 'webm', 'mov', 'mp3', 'wav', 'ogg']
           }, {
             name: 'Images',
             extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp']
@@ -215,11 +229,17 @@ export function TaskDetailsModal({ task, open, onOpenChange }: TaskDetailsModalP
           }, {
             name: 'Text',
             extensions: ['txt', 'md']
+          }, {
+            name: 'Video',
+            extensions: ['mp4', 'webm', 'mov']
+          }, {
+            name: 'Audio',
+            extensions: ['mp3', 'wav', 'ogg']
           }]
         })
 
-        if (selected && typeof selected === 'string') {
-          selectedPath = selected
+        if (selected) {
+          selectedPaths = Array.isArray(selected) ? selected : [selected]
         } else {
           return
         }
@@ -234,23 +254,37 @@ export function TaskDetailsModal({ task, open, onOpenChange }: TaskDetailsModalP
       }
     }
 
-    if (selectedPath) {
+    if (selectedPaths.length > 0) {
       setLoading(true)
+      let successCount = 0
+      let failCount = 0
+
       try {
-        await tauriAdapter.addAttachment(currentTask.id, selectedPath)
+        for (const path of selectedPaths) {
+          try {
+            await tauriAdapter.addAttachment(currentTask.id, path)
+            successCount++
+          } catch (error: any) {
+            console.error('Failed to add attachment:', path, error)
+            failCount++
+          }
+        }
+
         await loadAttachments()
-        toast({
-          title: 'Success',
-          description: 'File attached successfully.',
-          variant: 'default',
-        })
-      } catch (error: any) {
-        console.error('Failed to add attachment:', error)
-        toast({
-          title: 'Error',
-          description: error?.message || 'Failed to add attachment.',
-          variant: 'destructive',
-        })
+
+        if (successCount > 0) {
+          toast({
+            title: 'Success',
+            description: `${successCount} file${successCount > 1 ? 's' : ''} attached successfully.${failCount > 0 ? ` ${failCount} failed.` : ''}`,
+            variant: 'default',
+          })
+        } else {
+          toast({
+            title: 'Error',
+            description: 'Failed to attach files.',
+            variant: 'destructive',
+          })
+        }
       } finally {
         setLoading(false)
       }
@@ -313,6 +347,58 @@ export function TaskDetailsModal({ task, open, onOpenChange }: TaskDetailsModalP
     })
   }
 
+  const handleAddAttachmentFromFile = async (taskId: string, file: File) => {
+    if (!isTauri()) {
+      toast({
+        title: 'Not available',
+        description: 'Attachments are only available in Tauri desktop app.',
+        variant: 'default',
+      })
+      return
+    }
+
+    try {
+      // In Tauri mode, we need to write the file to a temporary location first
+      const { writeFile } = await import('@tauri-apps/api/fs')
+      const { join, appDataDir } = await import('@tauri-apps/api/path')
+      
+      const dataDir = await appDataDir()
+      const tempDir = await join(dataDir, 'temp')
+      const tempPath = await join(tempDir, file.name)
+      
+      // Create temp directory if it doesn't exist
+      try {
+        const { createDir } = await import('@tauri-apps/api/fs')
+        await createDir(tempDir, { recursive: true })
+      } catch (error) {
+        // Directory might already exist
+      }
+      
+      // Write file
+      const arrayBuffer = await file.arrayBuffer()
+      await writeFile(tempPath, new Uint8Array(arrayBuffer))
+      
+      // Add attachment using the temp file path
+      await tauriAdapter.addAttachment(taskId, tempPath)
+      
+      // Reload attachments
+      await loadAttachments()
+      
+      toast({
+        title: 'Success',
+        description: 'Attachment added successfully.',
+        variant: 'default',
+      })
+    } catch (error) {
+      console.error('Failed to add attachment from file:', error)
+      toast({
+        title: 'Error',
+        description: 'Failed to add attachment.',
+        variant: 'destructive',
+      })
+    }
+  }
+
   const handleDeleteAttachment = async (id: string) => {
     try {
       // Check if this was the background image
@@ -322,12 +408,13 @@ export function TaskDetailsModal({ task, open, onOpenChange }: TaskDetailsModalP
       await loadAttachments()
       
       // Remove image URL if it exists
+      const url = imageUrlsRef.current.get(id)
+      if (url) {
+        URL.revokeObjectURL(url)
+        imageUrlsRef.current.delete(id)
+      }
       setImageUrls((prev) => {
         const newMap = new Map(prev)
-        const url = newMap.get(id)
-        if (url) {
-          URL.revokeObjectURL(url)
-        }
         newMap.delete(id)
         return newMap
       })
@@ -765,6 +852,8 @@ export function TaskDetailsModal({ task, open, onOpenChange }: TaskDetailsModalP
                                       onImageLoad={() => {
                                         console.log('Image loaded:', attachment.filename)
                                       }}
+                                      onAttachmentAdded={handleAddAttachmentFromFile}
+                                      taskId={currentTask.id}
                                     />
                                     {isImageAttachment && (
                                       <button
@@ -812,10 +901,11 @@ export function TaskDetailsModal({ task, open, onOpenChange }: TaskDetailsModalP
                           <input
                             ref={fileInputRef}
                             type="file"
-                            accept=".png,.jpg,.jpeg,.gif,.webp,.pdf,.txt,.md,application/pdf,text/plain,text/markdown"
+                            accept=".png,.jpg,.jpeg,.gif,.webp,.bmp,.svg,.ico,.pdf,.txt,.md,.mp4,.webm,.mov,.mp3,.wav,.ogg,application/pdf,text/plain,text/markdown,video/mp4,video/webm,video/quicktime,audio/mpeg,audio/wav,audio/ogg"
+                            multiple
                             className="hidden"
                             onChange={handleFileInputChange}
-                            aria-label="Attach file (image, PDF, text)"
+                            aria-label="Attach file (image, PDF, text, video, audio)"
                           />
                           
                           {/* Drag and drop zone */}
@@ -831,18 +921,30 @@ export function TaskDetailsModal({ task, open, onOpenChange }: TaskDetailsModalP
                               loading && 'opacity-50 cursor-not-allowed'
                             )}
                           >
-                            <button
-                              onClick={() => handleAddAttachment()}
-                              disabled={loading}
-                              className={clsx(
-                                'flex items-center justify-center gap-2 w-full text-sm text-muted-foreground transition-colors hover:text-primary-500',
-                                loading && 'opacity-50 cursor-not-allowed'
+                            <div className="flex flex-col gap-2">
+                              <button
+                                onClick={() => handleAddAttachment()}
+                                disabled={loading}
+                                className={clsx(
+                                  'flex items-center justify-center gap-2 w-full text-sm text-muted-foreground transition-colors hover:text-primary-500',
+                                  loading && 'opacity-50 cursor-not-allowed'
+                                )}
+                                aria-label="Attach file (image, PDF, text, video, audio)"
+                              >
+                                <Upload className="h-4 w-4" />
+                                {loading ? 'Adding...' : 'Attach file (image, PDF, text, video, audio)'}
+                              </button>
+                              
+                              {/* Screenshot capture button */}
+                              {isTauri() && currentTask && (
+                                <ScreenshotCapture
+                                  onCapture={async (file) => {
+                                    await handleAddAttachmentFromFile(currentTask.id, file)
+                                  }}
+                                />
                               )}
-                              aria-label="Attach file (image, PDF, text)"
-                            >
-                              <Upload className="h-4 w-4" />
-                              {loading ? 'Adding...' : 'Attach file (image, PDF, text)'}
-                            </button>
+                            </div>
+                            
                             {isTauri() && (
                               <p className="text-xs text-muted-foreground mt-2">
                                 Drag and drop files here (or click to select)

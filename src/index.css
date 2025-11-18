@@ -99,6 +99,75 @@
     @apply transition-colors duration-200 hover:bg-muted;
   }
 
+  /* Prose styles for markdown rendering */
+  .prose {
+    @apply text-foreground max-w-none;
+  }
+  
+  .prose h1 {
+    @apply text-3xl font-bold mt-6 mb-4;
+  }
+  
+  .prose h2 {
+    @apply text-2xl font-bold mt-5 mb-3;
+  }
+  
+  .prose h3 {
+    @apply text-xl font-semibold mt-4 mb-2;
+  }
+  
+  .prose p {
+    @apply my-3;
+  }
+  
+  .prose a {
+    @apply text-primary-500 hover:underline;
+  }
+  
+  .prose code {
+    @apply bg-muted px-1.5 py-0.5 rounded text-sm font-mono;
+  }
+  
+  .prose pre {
+    @apply bg-muted p-4 rounded-lg overflow-x-auto my-4;
+  }
+  
+  .prose ul {
+    @apply list-disc list-inside my-3;
+  }
+  
+  .prose ol {
+    @apply list-decimal list-inside my-3;
+  }
+  
+  .prose li {
+    @apply my-1;
+  }
+  
+  .prose blockquote {
+    @apply border-l-4 border-primary-500 pl-4 italic my-4;
+  }
+  
+  .prose img {
+    @apply rounded-lg my-4;
+  }
+  
+  .prose table {
+    @apply w-full border-collapse my-4;
+  }
+  
+  .prose th {
+    @apply border border-border bg-muted p-2 text-left font-semibold;
+  }
+  
+  .prose td {
+    @apply border border-border p-2;
+  }
+
+  .prose.dark\:prose-invert {
+    @apply dark:text-foreground;
+  }
+
   .smooth-shadow {
     @apply transition-shadow duration-200;
   }

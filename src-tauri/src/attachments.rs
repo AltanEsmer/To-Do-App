@@ -61,21 +61,25 @@ pub fn validate_file_type(file_path: &str) -> Result<(), String> {
     
     let ext = extension.as_deref().unwrap_or("");
     
-    // Allowed extensions: images, PDF, text
+    // Allowed extensions: images, PDF, text, video, audio
     let allowed_extensions = [
         // Images
-        "png", "jpg", "jpeg", "gif", "webp",
+        "png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "ico",
         // PDF
         "pdf",
         // Text
         "txt", "md",
+        // Video
+        "mp4", "webm", "mov",
+        // Audio
+        "mp3", "wav", "ogg",
     ];
     
     if allowed_extensions.contains(&ext) {
         Ok(())
     } else {
         Err(format!(
-            "File type not allowed. Allowed types: images (png, jpg, jpeg, gif, webp), PDF, text (txt, md), PDF"
+            "File type not allowed. Allowed types: images (png, jpg, jpeg, gif, webp, bmp, svg, ico), PDF, text (txt, md), video (mp4, webm, mov), audio (mp3, wav, ogg)"
         ))
     }
 }
@@ -88,13 +92,27 @@ pub fn get_mime_type(file_path: &str) -> Option<String> {
         .map(|e| e.to_lowercase());
     
     match extension.as_deref() {
+        // Images
         Some("png") => Some("image/png".to_string()),
         Some("jpg") | Some("jpeg") => Some("image/jpeg".to_string()),
         Some("gif") => Some("image/gif".to_string()),
         Some("webp") => Some("image/webp".to_string()),
+        Some("bmp") => Some("image/bmp".to_string()),
+        Some("svg") => Some("image/svg+xml".to_string()),
+        Some("ico") => Some("image/x-icon".to_string()),
+        // PDF
         Some("pdf") => Some("application/pdf".to_string()),
+        // Text
         Some("txt") => Some("text/plain".to_string()),
         Some("md") => Some("text/markdown".to_string()),
+        // Video
+        Some("mp4") => Some("video/mp4".to_string()),
+        Some("webm") => Some("video/webm".to_string()),
+        Some("mov") => Some("video/quicktime".to_string()),
+        // Audio
+        Some("mp3") => Some("audio/mpeg".to_string()),
+        Some("wav") => Some("audio/wav".to_string()),
+        Some("ogg") => Some("audio/ogg".to_string()),
         _ => None,
     }
 }

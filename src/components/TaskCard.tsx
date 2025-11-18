@@ -28,6 +28,8 @@ export function TaskCard({ task }: TaskCardProps) {
   const [hasRelatedTasks, setHasRelatedTasks] = useState(false)
   const [isBlocked, setIsBlocked] = useState(false)
   const [blockingTasksCount, setBlockingTasksCount] = useState(0)
+  const [isDraggingOver, setIsDraggingOver] = useState(false)
+  const [dragFileCount, setDragFileCount] = useState(0)
   const isOverdueTask = task.dueDate && !task.completed && isOverdue(task.dueDate)
 
   // Load background image attachment
@@ -148,6 +150,33 @@ export function TaskCard({ task }: TaskCardProps) {
     }, 100)
   }
 
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!isTauri()) return
+    setIsDraggingOver(true)
+    setDragFileCount(e.dataTransfer.items.length)
+  }
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDraggingOver(false)
+    setDragFileCount(0)
+  }
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDraggingOver(false)
+    setDragFileCount(0)
+
+    if (!isTauri()) return
+
+    // Show details modal to handle file attachments
+    setDetailsOpen(true)
+  }
+
   const priorityColors = {
     low: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
     medium: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300',
@@ -165,12 +194,16 @@ export function TaskCard({ task }: TaskCardProps) {
         transition: { duration: 0.2, ease: 'easeOut' }
       }}
       transition={{ duration: 0.2 }}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
       className={clsx(
         'group flex items-start gap-3 rounded-xl border border-border bg-card p-4 transition-all duration-200 relative overflow-hidden',
         'hover:border-primary-300 hover:shadow-xl hover:shadow-primary-500/10',
         'dark:hover:border-primary-700 dark:hover:shadow-primary-500/5',
         'hover:bg-card/95',
-        task.completed && 'opacity-60'
+        task.completed && 'opacity-60',
+        isDraggingOver && 'border-primary-500 border-2 shadow-2xl shadow-primary-500/30 scale-105'
       )}
       style={{
         backgroundImage: backgroundImageUrl ? `url(${backgroundImageUrl})` : undefined,
@@ -182,6 +215,29 @@ export function TaskCard({ task }: TaskCardProps) {
       {/* Background overlay for text readability */}
       {backgroundImageUrl && (
         <div className="absolute inset-0 bg-card/70 dark:bg-card/80" />
+      )}
+      
+      {/* Drag over indicator */}
+      {isDraggingOver && (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.9 }}
+          className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-primary-500/20 backdrop-blur-sm border-2 border-dashed border-primary-500 rounded-xl"
+        >
+          <motion.div
+            animate={{ scale: [1, 1.1, 1] }}
+            transition={{ duration: 1, repeat: Infinity }}
+            className="text-primary-600 dark:text-primary-400"
+          >
+            <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+            </svg>
+          </motion.div>
+          <p className="mt-2 text-sm font-semibold text-primary-700 dark:text-primary-300">
+            Drop {dragFileCount} file{dragFileCount > 1 ? 's' : ''} to attach
+          </p>
+        </motion.div>
       )}
       
       {/* Content with relative positioning */}
