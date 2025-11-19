@@ -359,7 +359,7 @@ export function TaskDetailsModal({ task, open, onOpenChange }: TaskDetailsModalP
 
     try {
       // In Tauri mode, we need to write the file to a temporary location first
-      const { writeFile } = await import('@tauri-apps/api/fs')
+      const { writeBinaryFile } = await import('@tauri-apps/api/fs')
       const { join, appDataDir } = await import('@tauri-apps/api/path')
       
       const dataDir = await appDataDir()
@@ -376,7 +376,7 @@ export function TaskDetailsModal({ task, open, onOpenChange }: TaskDetailsModalP
       
       // Write file
       const arrayBuffer = await file.arrayBuffer()
-      await writeFile(tempPath, new Uint8Array(arrayBuffer))
+      await writeBinaryFile(tempPath, new Uint8Array(arrayBuffer))
       
       // Add attachment using the temp file path
       await tauriAdapter.addAttachment(taskId, tempPath)

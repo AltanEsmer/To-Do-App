@@ -31,6 +31,11 @@ export function ImageEditorModal({
   const [isSaving, setIsSaving] = useState(false)
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
+  // Compute CSS filter for real-time preview
+  const imageStyle = {
+    filter: `brightness(${brightness}%) contrast(${contrast}%) saturate(${saturation}%)`,
+  }
+
   const onCropComplete = useCallback((croppedArea: Area, croppedAreaPixels: Area) => {
     setCroppedAreaPixels(croppedAreaPixels)
   }, [])
@@ -220,6 +225,10 @@ export function ImageEditorModal({
                 onCropChange={setCrop}
                 onZoomChange={setZoom}
                 onCropComplete={onCropComplete}
+                style={{
+                  containerStyle: {},
+                  mediaStyle: imageStyle,
+                }}
               />
             </div>
 

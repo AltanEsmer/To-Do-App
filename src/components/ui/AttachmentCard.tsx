@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { FileText, File, Download, Trash2, Eye, Film, Music, Edit } from 'lucide-react'
+import { FileText, File as FileIcon, Download, Trash2, Eye, Film, Music, Edit } from 'lucide-react'
 import * as tauriAdapter from '../../api/tauriAdapter'
 import { Card, CardContent } from './card'
 import { Badge } from './badge'
@@ -317,7 +317,7 @@ export function AttachmentCard({ attachment, imageUrl, onDelete, onImageLoad, on
                 </div>
               ) : isPDF() ? (
                 <div className="w-16 h-16 flex items-center justify-center bg-red-50 dark:bg-red-900/20 rounded border border-border">
-                  <File className="h-8 w-8 text-red-600 dark:text-red-400" />
+                  <FileIcon className="h-8 w-8 text-red-600 dark:text-red-400" />
                 </div>
               ) : isText() ? (
                 <div className="w-16 h-16 flex items-center justify-center bg-blue-50 dark:bg-blue-900/20 rounded border border-border">
@@ -325,7 +325,7 @@ export function AttachmentCard({ attachment, imageUrl, onDelete, onImageLoad, on
                 </div>
               ) : (
                 <div className="w-16 h-16 flex items-center justify-center bg-muted rounded border border-border">
-                  <File className="h-8 w-8 text-muted-foreground" />
+                  <FileIcon className="h-8 w-8 text-muted-foreground" />
                 </div>
               )}
             </div>
