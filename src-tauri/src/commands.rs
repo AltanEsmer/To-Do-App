@@ -3123,3 +3123,68 @@ pub fn get_pomodoro_streak(
     pomodoro_service::get_pomodoro_streak(&db.conn)
         .map_err(|e| format!("Failed to get pomodoro streak: {}", e))
 }
+
+// Screenshot command
+#[tauri::command]
+pub async fn capture_screenshot(mode: String) -> Result<Vec<u8>, String> {
+    use screenshots::Screen;
+    use image::ImageEncoder;
+    
+    match mode.as_str() {
+        "fullscreen" => {
+            let screens = Screen::all().map_err(|e| format!("Failed to get screens: {}", e))?;
+            let primary_screen = screens.first().ok_or("No screen found")?;
+            
+            let screenshot = primary_screen
+                .capture()
+                .map_err(|e| format!("Failed to capture screenshot: {}", e))?;
+            
+            // Convert to PNG bytes
+            let mut buffer = Vec::new();
+            let width = screenshot.width();
+            let height = screenshot.height();
+            let rgba = screenshot.rgba();
+            
+            let encoder = image::codecs::png::PngEncoder::new(&mut buffer);
+            encoder
+                .write_image(
+                    rgba,
+                    width,
+                    height,
+                    image::ColorType::Rgba8,
+                )
+                .map_err(|e| format!("Failed to encode screenshot: {}", e))?;
+            
+            Ok(buffer)
+        }
+        "window" => {
+            // For now, window mode also captures fullscreen
+            // In the future, this could be enhanced to capture specific windows
+            let screens = Screen::all().map_err(|e| format!("Failed to get screens: {}", e))?;
+            let primary_screen = screens.first().ok_or("No screen found")?;
+            
+            let screenshot = primary_screen
+                .capture()
+                .map_err(|e| format!("Failed to capture screenshot: {}", e))?;
+            
+            // Convert to PNG bytes
+            let mut buffer = Vec::new();
+            let width = screenshot.width();
+            let height = screenshot.height();
+            let rgba = screenshot.rgba();
+            
+            let encoder = image::codecs::png::PngEncoder::new(&mut buffer);
+            encoder
+                .write_image(
+                    rgba,
+                    width,
+                    height,
+                    image::ColorType::Rgba8,
+                )
+                .map_err(|e| format!("Failed to encode screenshot: {}", e))?;
+            
+            Ok(buffer)
+        }
+        _ => Err(format!("Unsupported screenshot mode: {}", mode)),
+    }
+}

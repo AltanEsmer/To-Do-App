@@ -213,6 +213,7 @@ fn main() {
             commands::get_best_focus_times,
             commands::get_task_completion_rates,
             commands::get_pomodoro_streak,
+            commands::capture_screenshot,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

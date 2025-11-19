@@ -29,6 +29,7 @@ export function ImageEditorModal({
   const [contrast, setContrast] = useState(100)
   const [saturation, setSaturation] = useState(100)
   const [isSaving, setIsSaving] = useState(false)
+  const [aspectRatio, setAspectRatio] = useState<number | undefined>(undefined)
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
   // Compute CSS filter for real-time preview
@@ -221,7 +222,7 @@ export function ImageEditorModal({
                 crop={crop}
                 zoom={zoom}
                 rotation={rotation}
-                aspect={activeTab === 'crop' ? 16 / 9 : undefined}
+                aspect={aspectRatio}
                 onCropChange={setCrop}
                 onZoomChange={setZoom}
                 onCropComplete={onCropComplete}
@@ -236,6 +237,51 @@ export function ImageEditorModal({
             <div className="w-80 border-l border-border p-4 bg-muted/30 overflow-y-auto">
               {activeTab === 'crop' && (
                 <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Aspect Ratio</label>
+                    <div className="grid grid-cols-2 gap-2 mb-3">
+                      <button
+                        onClick={() => setAspectRatio(undefined)}
+                        className={`focus-ring px-3 py-2 rounded-lg border text-xs transition-colors ${
+                          aspectRatio === undefined
+                            ? 'bg-primary text-primary-foreground border-primary'
+                            : 'border-border hover:bg-muted'
+                        }`}
+                      >
+                        Free
+                      </button>
+                      <button
+                        onClick={() => setAspectRatio(1)}
+                        className={`focus-ring px-3 py-2 rounded-lg border text-xs transition-colors ${
+                          aspectRatio === 1
+                            ? 'bg-primary text-primary-foreground border-primary'
+                            : 'border-border hover:bg-muted'
+                        }`}
+                      >
+                        1:1
+                      </button>
+                      <button
+                        onClick={() => setAspectRatio(4 / 3)}
+                        className={`focus-ring px-3 py-2 rounded-lg border text-xs transition-colors ${
+                          aspectRatio === 4 / 3
+                            ? 'bg-primary text-primary-foreground border-primary'
+                            : 'border-border hover:bg-muted'
+                        }`}
+                      >
+                        4:3
+                      </button>
+                      <button
+                        onClick={() => setAspectRatio(16 / 9)}
+                        className={`focus-ring px-3 py-2 rounded-lg border text-xs transition-colors ${
+                          aspectRatio === 16 / 9
+                            ? 'bg-primary text-primary-foreground border-primary'
+                            : 'border-border hover:bg-muted'
+                        }`}
+                      >
+                        16:9
+                      </button>
+                    </div>
+                  </div>
                   <div>
                     <label className="block text-sm font-medium mb-2">Zoom</label>
                     <input
