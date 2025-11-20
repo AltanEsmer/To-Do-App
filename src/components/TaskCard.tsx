@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Check, X, Target, Link2, Repeat, Calendar, Lock } from 'lucide-react'
@@ -11,6 +11,8 @@ import * as Checkbox from '@radix-ui/react-checkbox'
 import * as tauriAdapter from '../api/tauriAdapter'
 import { isTauri } from '../utils/tauri'
 import { TagBadge } from './TagBadge'
+import { imageCache } from '../utils/imageCache'
+import { useLazyLoad } from '../hooks/useLazyLoad'
 
 interface TaskCardProps {
   task: Task
@@ -25,67 +27,81 @@ export function TaskCard({ task }: TaskCardProps) {
   const navigate = useNavigate()
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [backgroundImageUrl, setBackgroundImageUrl] = useState<string | null>(null)
+  const [isImageLoading, setIsImageLoading] = useState(false)
   const [hasRelatedTasks, setHasRelatedTasks] = useState(false)
   const [isBlocked, setIsBlocked] = useState(false)
   const [blockingTasksCount, setBlockingTasksCount] = useState(0)
   const [isDraggingOver, setIsDraggingOver] = useState(false)
   const [dragFileCount, setDragFileCount] = useState(0)
   const isOverdueTask = task.dueDate && !task.completed && isOverdue(task.dueDate)
+  const { isVisible, elementRef } = useLazyLoad({ threshold: 0.1, rootMargin: '100px' })
 
-  // Load background image attachment
-  useEffect(() => {
-    if (!isTauri() || !task.id) return
+  // Memoized function to load background image with caching
+  const loadBackgroundImage = useCallback(async () => {
+    if (!isTauri() || !task.id || isImageLoading) return
 
-    const loadBackgroundImage = async () => {
-      // Clear existing background
-      if (backgroundImageUrl) {
-        URL.revokeObjectURL(backgroundImageUrl)
-        setBackgroundImageUrl(null)
-      }
-      try {
-        const attachments = await tauriAdapter.getAttachments(task.id)
-        const imageAttachments = attachments.filter((att) => {
-          if (att.mime && att.mime.startsWith('image/')) return true
-          const ext = att.filename.split('.').pop()?.toLowerCase()
-          return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'ico'].includes(ext || '')
-        })
-
-        if (imageAttachments.length > 0) {
-          // Check if a specific image is selected as background
-          const selectedImageId = localStorage.getItem(`task_bg_image_${task.id}`)
-          const selectedImage = selectedImageId 
-            ? imageAttachments.find(att => att.id === selectedImageId)
-            : null
-          
-          // Use selected image or first image
-          const imageToUse = selectedImage || imageAttachments[0]
-          try {
-            const { appDataDir } = await import('@tauri-apps/api/path')
-            const { join } = await import('@tauri-apps/api/path')
-            const { readBinaryFile } = await import('@tauri-apps/api/fs')
-            const dataDir = await appDataDir()
-            const fullPath = await join(dataDir, imageToUse.path)
-            const fileData = await readBinaryFile(fullPath)
-            
-            if (fileData && fileData.length > 0) {
-              const mimeType = imageToUse.mime || 
-                (imageToUse.filename.toLowerCase().endsWith('.png') ? 'image/png' :
-                 imageToUse.filename.toLowerCase().endsWith('.gif') ? 'image/gif' :
-                 imageToUse.filename.toLowerCase().endsWith('.webp') ? 'image/webp' :
-                 'image/jpeg')
-              const blob = new Blob([fileData], { type: mimeType })
-              const url = URL.createObjectURL(blob)
-              setBackgroundImageUrl(url)
-            }
-          } catch (error) {
-            console.error('Failed to load background image:', error)
-          }
-        }
-      } catch (error) {
-        console.error('Failed to load attachments:', error)
-      }
+    // Check cache first
+    const selectedImageId = localStorage.getItem(`task_bg_image_${task.id}`)
+    const cacheKey = `task_bg_${task.id}_${selectedImageId || 'default'}`
+    const cachedUrl = imageCache.get(cacheKey)
+    
+    if (cachedUrl) {
+      setBackgroundImageUrl(cachedUrl)
+      return
     }
 
+    setIsImageLoading(true)
+    try {
+      const attachments = await tauriAdapter.getAttachments(task.id)
+      const imageAttachments = attachments.filter((att) => {
+        if (att.mime && att.mime.startsWith('image/')) return true
+        const ext = att.filename.split('.').pop()?.toLowerCase()
+        return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'ico'].includes(ext || '')
+      })
+
+      if (imageAttachments.length > 0) {
+        const selectedImage = selectedImageId 
+          ? imageAttachments.find(att => att.id === selectedImageId)
+          : null
+        
+        const imageToUse = selectedImage || imageAttachments[0]
+        if (!imageToUse) return
+        
+        try {
+          const { appDataDir } = await import('@tauri-apps/api/path')
+          const { join } = await import('@tauri-apps/api/path')
+          const { readBinaryFile } = await import('@tauri-apps/api/fs')
+          const dataDir = await appDataDir()
+          const fullPath = await join(dataDir, imageToUse.path)
+          const fileData = await readBinaryFile(fullPath)
+          
+          if (fileData && fileData.length > 0) {
+            const mimeType = imageToUse.mime || 
+              (imageToUse.filename.toLowerCase().endsWith('.png') ? 'image/png' :
+               imageToUse.filename.toLowerCase().endsWith('.gif') ? 'image/gif' :
+               imageToUse.filename.toLowerCase().endsWith('.webp') ? 'image/webp' :
+               'image/jpeg')
+            const blob = new Blob([fileData.buffer as ArrayBuffer], { type: mimeType })
+            const url = URL.createObjectURL(blob)
+            
+            // Cache the image
+            imageCache.set(cacheKey, url, fileData.length)
+            setBackgroundImageUrl(url)
+          }
+        } catch (error) {
+          console.error('Failed to load background image:', error)
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load attachments:', error)
+    } finally {
+      setIsImageLoading(false)
+    }
+  }, [task.id, isImageLoading])
+
+  // Load background image only when visible (lazy loading)
+  useEffect(() => {
+    if (!isVisible) return
     loadBackgroundImage()
 
     // Listen for background change events
@@ -96,15 +112,10 @@ export function TaskCard({ task }: TaskCardProps) {
     }
     window.addEventListener('task-background-changed', handleBackgroundChange as EventListener)
 
-    // Cleanup blob URL on unmount or when task changes
     return () => {
       window.removeEventListener('task-background-changed', handleBackgroundChange as EventListener)
-      if (backgroundImageUrl) {
-        URL.revokeObjectURL(backgroundImageUrl)
-        setBackgroundImageUrl(null)
-      }
     }
-  }, [task.id])
+  }, [task.id, isVisible, loadBackgroundImage])
 
   // Check if task has relationships
   useEffect(() => {
@@ -185,6 +196,7 @@ export function TaskCard({ task }: TaskCardProps) {
 
   return (
     <motion.div
+      ref={elementRef}
       layout
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}

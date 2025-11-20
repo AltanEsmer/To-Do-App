@@ -4,6 +4,8 @@ import { Home, ClipboardList, CheckCircle2, Settings, BarChart3, Timer, Hash, Ka
 import clsx from 'clsx'
 import { useTranslation } from 'react-i18next'
 import * as tauriAdapter from '../api/tauriAdapter'
+import { useXp } from '../store/useXp'
+import { RankBadge } from './RankBadge'
 
 interface NavItem {
   path: string
@@ -62,6 +64,7 @@ export function Sidebar() {
   const { t } = useTranslation()
   const [statisticsVisible, setStatisticsVisible] = useState(true)
   const [kanbanVisible, setKanbanVisible] = useState(true)
+  const { rankTier, rankDivision, level, syncFromBackend } = useXp()
 
   useEffect(() => {
     const loadStatisticsVisibility = async () => {
@@ -78,6 +81,7 @@ export function Sidebar() {
       }
     }
     loadStatisticsVisibility()
+    syncFromBackend()
 
     // Listen for settings changes to update immediately
     const handleSettingsChange = () => {
@@ -87,7 +91,7 @@ export function Sidebar() {
     return () => {
       window.removeEventListener('settings-changed', handleSettingsChange)
     }
-  }, [])
+  }, [syncFromBackend])
 
   // Filter nav items based on statistics and kanban visibility settings
   const visibleNavItems = navItems.filter((item) => {
@@ -126,6 +130,16 @@ export function Sidebar() {
           )
         })}
       </nav>
+
+      {/* Rank Display */}
+      <div className="border-t border-border px-4 py-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-xs text-muted-foreground">Level {level}</p>
+          </div>
+          <RankBadge tier={rankTier} division={rankDivision} size="sm" showLabel={false} />
+        </div>
+      </div>
     </aside>
   )
 }

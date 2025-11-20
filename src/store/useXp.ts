@@ -1,6 +1,12 @@
 import { create } from 'zustand'
 import * as tauriAdapter from '../api/tauriAdapter'
 import { toast } from '../components/ui/use-toast'
+import {
+  RankTier,
+  RankDivision,
+  getRankDisplayName,
+  getRankInfo,
+} from '../utils/rankSystem'
 
 interface XpState {
   level: number
@@ -11,8 +17,14 @@ interface XpState {
   badges: tauriAdapter.Badge[]
   hasLeveledUp: boolean
   newLevel: number | null
+  rankTier: RankTier
+  rankDivision: RankDivision
+  rankProgress: number
+  hasRankedUp: boolean
+  newRank: { tier: RankTier; division: RankDivision } | null
   grantXp: (xp: number, source: string, taskId?: string) => Promise<void>
   resetLevelUp: () => void
+  resetRankUp: () => void
   syncFromBackend: () => Promise<void>
   loadBadges: () => Promise<void>
   checkBadges: () => Promise<void>
@@ -61,6 +73,11 @@ export const useXp = create<XpState>()((set, get) => ({
   badges: [],
   hasLeveledUp: false,
   newLevel: null,
+  rankTier: 'iron',
+  rankDivision: 4,
+  rankProgress: 0,
+  hasRankedUp: false,
+  newRank: null,
 
   calculateLevel,
   calculateXpToNextLevel,
@@ -72,18 +89,31 @@ export const useXp = create<XpState>()((set, get) => ({
       const xpToNextLevel = calculateXpToNextLevel(level)
       const currentXp = calculateCurrentXp(progress.total_xp, level)
 
+      // Calculate rank
+      const rankInfo = getRankInfo(progress.total_xp)
+
       set({
         level,
         currentXp,
         totalXp: progress.total_xp,
         xpToNextLevel,
         streak: progress.current_streak,
+        rankTier: rankInfo.tier,
+        rankDivision: rankInfo.division,
+        rankProgress: rankInfo.progress,
       })
       
-      console.log('XP synced from backend:', { level, currentXp, totalXp: progress.total_xp, xpToNextLevel, streak: progress.current_streak })
+      console.log('XP synced from backend:', { 
+        level, 
+        currentXp, 
+        totalXp: progress.total_xp, 
+        xpToNextLevel, 
+        streak: progress.current_streak,
+        rank: getRankDisplayName(rankInfo.tier, rankInfo.division),
+        rankProgress: rankInfo.progress,
+      })
     } catch (error) {
       console.error('Failed to sync XP from backend:', error)
-      // Keep default values on error - they're already set in initial state
     }
   },
 
@@ -128,12 +158,18 @@ export const useXp = create<XpState>()((set, get) => ({
   grantXp: async (xp: number, source: string, taskId?: string) => {
     try {
       const state = get()
-      const previousLevel = state.level
+      const previousRank = { tier: state.rankTier, division: state.rankDivision }
       
       const result = await tauriAdapter.grantXp(xp, source, taskId)
       
       // Detect level-up
       const leveledUp = result.level_up
+
+      // Calculate new rank
+      const newRankInfo = getRankInfo(result.total_xp)
+      const rankedUp = 
+        newRankInfo.tier !== previousRank.tier || 
+        newRankInfo.division !== previousRank.division
 
       set({
         totalXp: result.total_xp,
@@ -142,7 +178,23 @@ export const useXp = create<XpState>()((set, get) => ({
         xpToNextLevel: result.xp_to_next_level,
         hasLeveledUp: leveledUp,
         newLevel: leveledUp ? result.new_level : null,
+        rankTier: newRankInfo.tier,
+        rankDivision: newRankInfo.division,
+        rankProgress: newRankInfo.progress,
+        hasRankedUp: rankedUp,
+        newRank: rankedUp ? { tier: newRankInfo.tier, division: newRankInfo.division } : null,
       })
+
+      // Show rank up notification
+      if (rankedUp) {
+        const rankName = getRankDisplayName(newRankInfo.tier, newRankInfo.division)
+        toast({
+          title: '🏆 Rank Up!',
+          description: `You've been promoted to ${rankName}!`,
+          variant: 'success',
+          duration: 5000,
+        })
+      }
 
       // Check for badges after XP grant
       if (leveledUp) {
@@ -152,12 +204,18 @@ export const useXp = create<XpState>()((set, get) => ({
       console.error('Failed to grant XP:', error)
       // Fallback to local calculation if backend fails
       const state = get()
-      const previousLevel = state.level
+      const previousRank = { tier: state.rankTier, division: state.rankDivision }
       const newTotalXp = Math.max(0, state.totalXp + xp)
       const newLevel = calculateLevel(newTotalXp)
       const newXpToNextLevel = calculateXpToNextLevel(newLevel)
       const newCurrentXp = calculateCurrentXp(newTotalXp, newLevel)
-      const leveledUp = newLevel > previousLevel
+      const leveledUp = newLevel > state.level
+
+      // Calculate new rank
+      const newRankInfo = getRankInfo(newTotalXp)
+      const rankedUp = 
+        newRankInfo.tier !== previousRank.tier || 
+        newRankInfo.division !== previousRank.division
 
       set({
         totalXp: newTotalXp,
@@ -166,6 +224,11 @@ export const useXp = create<XpState>()((set, get) => ({
         xpToNextLevel: newXpToNextLevel,
         hasLeveledUp: leveledUp,
         newLevel: leveledUp ? newLevel : null,
+        rankTier: newRankInfo.tier,
+        rankDivision: newRankInfo.division,
+        rankProgress: newRankInfo.progress,
+        hasRankedUp: rankedUp,
+        newRank: rankedUp ? { tier: newRankInfo.tier, division: newRankInfo.division } : null,
       })
     }
   },
@@ -174,6 +237,13 @@ export const useXp = create<XpState>()((set, get) => ({
     set({
       hasLeveledUp: false,
       newLevel: null,
+    })
+  },
+
+  resetRankUp: () => {
+    set({
+      hasRankedUp: false,
+      newRank: null,
     })
   },
 }))

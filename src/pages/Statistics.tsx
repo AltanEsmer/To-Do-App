@@ -21,6 +21,7 @@ import { useTranslation } from 'react-i18next'
 import * as tauriAdapter from '../api/tauriAdapter'
 import { useTasks } from '../store/useTasks'
 import { isTauri } from '../utils/tauri'
+import { RankPanel } from '../components/RankPanel'
 
 type DateRange = '7' | '30' | '90' | 'all'
 
@@ -235,6 +236,9 @@ export function Statistics() {
       </div>
 
       <div className="flex-1 space-y-6 overflow-y-auto pb-6">
+        {/* Rank Panel */}
+        <RankPanel />
+
         {/* Summary Cards */}
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-5">
           <div className="rounded-xl border border-border bg-card p-4">
