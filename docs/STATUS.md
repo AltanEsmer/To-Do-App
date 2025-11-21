@@ -399,7 +399,8 @@ To-Do-App/
 │
 ├── package.json
 ├── README.md
-└── STATUS.md                     # This file
+└── docs/
+    └── STATUS.md                 # This file
 ```
 
 ---
