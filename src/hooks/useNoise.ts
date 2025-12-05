@@ -21,7 +21,8 @@ export function useNoise() {
   const createNoiseBuffer = (type: NoiseType) => {
     if (!audioContextRef.current) return null
     
-    const bufferSize = audioContextRef.current.sampleRate * 2 // 2 seconds buffer
+    // Increase buffer to 5 seconds to reduce loop repetition
+    const bufferSize = audioContextRef.current.sampleRate * 5 
     const buffer = audioContextRef.current.createBuffer(1, bufferSize, audioContextRef.current.sampleRate)
     const data = buffer.getChannelData(0)
     
@@ -41,16 +42,17 @@ export function useNoise() {
         b4 = 0.55000 * b4 + white * 0.5329522
         b5 = -0.7616 * b5 - white * 0.0168980
         data[i] = b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362
-        data[i] *= 0.11 // (roughly) compensate for gain
+        data[i] = (data[i] || 0) * 0.11 // (roughly) compensate for gain
         b6 = white * 0.115926
       }
     } else if (type === 'brown') {
       let lastOut = 0.0
       for (let i = 0; i < bufferSize; i++) {
         const white = Math.random() * 2 - 1
-        data[i] = (lastOut + (0.02 * white)) / 1.02
-        lastOut = data[i]
-        data[i] *= 3.5 // (roughly) compensate for gain
+        const val = (lastOut + (0.02 * white)) / 1.02
+        data[i] = val
+        lastOut = val
+        data[i] = (data[i] || 0) * 3.5 // (roughly) compensate for gain
       }
     }
     
@@ -60,12 +62,26 @@ export function useNoise() {
   const stop = useCallback(() => {
     if (sourceNodeRef.current) {
       try {
-        sourceNodeRef.current.stop()
+        // Fade out before stopping to avoid clicks
+        if (gainNodeRef.current && audioContextRef.current) {
+           const currentTime = audioContextRef.current.currentTime
+           gainNodeRef.current.gain.cancelScheduledValues(currentTime)
+           gainNodeRef.current.gain.setValueAtTime(gainNodeRef.current.gain.value, currentTime)
+           gainNodeRef.current.gain.exponentialRampToValueAtTime(0.001, currentTime + 0.1)
+           
+           setTimeout(() => {
+             sourceNodeRef.current?.stop()
+             sourceNodeRef.current?.disconnect()
+             sourceNodeRef.current = null
+           }, 100)
+        } else {
+           sourceNodeRef.current.stop()
+           sourceNodeRef.current.disconnect()
+           sourceNodeRef.current = null
+        }
       } catch (e) {
         // Ignore if already stopped
       }
-      sourceNodeRef.current.disconnect()
-      sourceNodeRef.current = null
     }
     setIsPlaying(false)
   }, [])
@@ -90,10 +106,25 @@ export function useNoise() {
     source.buffer = buffer
     source.loop = true
     
+    // Create LowPass Filter for "chill" effect
+    const filterNode = audioContextRef.current.createBiquadFilter()
+    filterNode.type = 'lowpass'
+    
+    // Adjust frequencies for a softer, more ambient sound
+    if (type === 'white') {
+      filterNode.frequency.value = 800 // Soft stream / Waterfall
+    } else if (type === 'pink') {
+      filterNode.frequency.value = 400 // Rain
+    } else if (type === 'brown') {
+      filterNode.frequency.value = 200 // Deep Thunder / Rumble
+    }
+
     const gainNode = audioContextRef.current.createGain()
     gainNode.gain.value = volume
     
-    source.connect(gainNode)
+    // Connect: Source -> Filter -> Gain -> Destination
+    source.connect(filterNode)
+    filterNode.connect(gainNode)
     gainNode.connect(audioContextRef.current.destination)
     
     source.start()
@@ -114,10 +145,14 @@ export function useNoise() {
   }
 
   useEffect(() => {
-    if (gainNodeRef.current) {
-      gainNodeRef.current.gain.value = volume
+    if (gainNodeRef.current && isPlaying) {
+      // Smooth volume transition
+      const currentTime = audioContextRef.current?.currentTime || 0
+      gainNodeRef.current.gain.cancelScheduledValues(currentTime)
+      gainNodeRef.current.gain.setValueAtTime(gainNodeRef.current.gain.value, currentTime)
+      gainNodeRef.current.gain.exponentialRampToValueAtTime(Math.max(0.001, volume), currentTime + 0.1)
     }
-  }, [volume])
+  }, [volume, isPlaying])
 
   // Cleanup
   useEffect(() => {

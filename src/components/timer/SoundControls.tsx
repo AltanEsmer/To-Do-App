@@ -11,9 +11,9 @@ export function SoundControls() {
   const { isPlaying, noiseType, volume, setVolume, toggle } = useNoise()
 
   const sounds: { type: NoiseType; label: string; icon: React.ReactNode }[] = [
-    { type: 'white', label: 'White Noise', icon: <Waves className="h-4 w-4" /> },
-    { type: 'pink', label: 'Pink Noise', icon: <CloudRain className="h-4 w-4" /> },
-    { type: 'brown', label: 'Brown Noise', icon: <Wind className="h-4 w-4" /> },
+    { type: 'white', label: 'Soft Stream', icon: <Waves className="h-4 w-4" /> },
+    { type: 'pink', label: 'Rain', icon: <CloudRain className="h-4 w-4" /> },
+    { type: 'brown', label: 'Cosmic Flow', icon: <Wind className="h-4 w-4" /> },
   ]
 
   return (
@@ -71,7 +71,7 @@ export function SoundControls() {
               value={[volume]}
               max={1}
               step={0.01}
-              onValueChange={(vals) => setVolume(vals[0])}
+              onValueChange={(vals) => setVolume(vals[0] ?? 0.5)}
               className="text-primary-500"
             />
           </div>

@@ -74,53 +74,54 @@ export function Pomodoro() {
         <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-blue-500/20 rounded-full blur-3xl transform translate-y-1/2" />
       </div>
 
-      <div className="z-10 flex h-full flex-col p-6 max-w-7xl mx-auto w-full">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h2 className="text-3xl font-bold tracking-tight text-foreground">{t('pomodoro.title')}</h2>
-            <p className="mt-1 text-sm text-muted-foreground font-medium">{t('pomodoro.subtitle')}</p>
-          </div>
-          
-          <div className="flex items-center gap-3">
-            <SoundControls />
+      <div className="z-10 h-full overflow-y-auto">
+        <div className="flex flex-col p-6 max-w-7xl mx-auto w-full min-h-full">
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4">
+            <div>
+              <h2 className="text-3xl font-bold tracking-tight text-foreground">{t('pomodoro.title')}</h2>
+              <p className="mt-1 text-sm text-muted-foreground font-medium">{t('pomodoro.subtitle')}</p>
+            </div>
             
-            <button
-              onClick={() => setShowStats(!showStats)}
-              className={`flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition-all ${
-                showStats 
-                  ? 'bg-secondary text-secondary-foreground border-secondary' 
-                  : 'bg-background text-muted-foreground border-border hover:bg-muted hover:text-foreground'
-              }`}
-            >
-              <BarChart3 className="h-4 w-4" />
-              <span className="hidden sm:inline">{showStats ? 'Hide Stats' : 'Stats'}</span>
-            </button>
+            <div className="flex items-center gap-3 self-end sm:self-auto">
+              <SoundControls />
+              
+              <button
+                onClick={() => setShowStats(!showStats)}
+                className={`flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition-all ${
+                  showStats 
+                    ? 'bg-secondary text-secondary-foreground border-secondary' 
+                    : 'bg-background text-muted-foreground border-border hover:bg-muted hover:text-foreground'
+                }`}
+              >
+                <BarChart3 className="h-4 w-4" />
+                <span className="hidden sm:inline">{showStats ? 'Hide Stats' : 'Stats'}</span>
+              </button>
+            </div>
           </div>
-        </div>
 
-        {/* Stats Panel (Collapsible) */}
-        <AnimatePresence>
-          {showStats && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              className="overflow-hidden mb-8"
-            >
-              <div className="p-1">
-                 <PomodoroStatsDisplay />
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+          {/* Stats Panel (Collapsible) */}
+          <AnimatePresence>
+            {showStats && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="overflow-hidden mb-8"
+              >
+                <div className="p-1">
+                   <PomodoroStatsDisplay />
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
-        {/* Main Content Area */}
-        <div className="flex-1 flex flex-col items-center justify-center min-h-[500px]">
-          <div className="grid lg:grid-cols-12 gap-12 w-full items-center">
-            
-            {/* Left Column: Task Selection / Active Task */}
-            <div className="lg:col-span-4 order-2 lg:order-1 flex flex-col gap-6">
+          {/* Main Content Area */}
+          <div className="flex-1 flex flex-col items-center justify-start min-h-[500px]">
+            <div className="grid lg:grid-cols-12 gap-12 w-full items-start">
+              
+              {/* Left Column: Task Selection / Active Task */}
+              <div className="lg:col-span-4 order-2 lg:order-1 flex flex-col gap-6">
                <Card className="p-6 shadow-md border-border/50 bg-card/50 backdrop-blur-sm">
                  <div className="flex items-center gap-2 mb-4 text-muted-foreground">
                     <ListTodo className="h-5 w-5" />
@@ -195,6 +196,7 @@ export function Pomodoro() {
 
           </div>
         </div>
+      </div>
       </div>
 
       {/* Completion Dialog */}
