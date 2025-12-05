@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, memo, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Check, X, Target, Link2, Repeat, Calendar, Lock } from 'lucide-react'
@@ -21,9 +21,16 @@ interface TaskCardProps {
 /**
  * Task card component with checkbox, title, due date, and priority indicator
  */
-export function TaskCard({ task }: TaskCardProps) {
-  const { toggleComplete, deleteTask, getRelatedTasks, checkIsBlocked, getBlockingTasks } = useTasks()
-  const { setActiveTask, setMode, startTimer } = useTimer()
+export const TaskCard = memo(function TaskCard({ task }: TaskCardProps) {
+  // Use selective Zustand subscriptions for better performance
+  const toggleComplete = useTasks((state) => state.toggleComplete)
+  const deleteTask = useTasks((state) => state.deleteTask)
+  const getRelatedTasks = useTasks((state) => state.getRelatedTasks)
+  const checkIsBlocked = useTasks((state) => state.checkIsBlocked)
+  const getBlockingTasks = useTasks((state) => state.getBlockingTasks)
+  const setActiveTask = useTimer((state) => state.setActiveTask)
+  const setMode = useTimer((state) => state.setMode)
+  const startTimer = useTimer((state) => state.startTimer)
   const navigate = useNavigate()
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [backgroundImageUrl, setBackgroundImageUrl] = useState<string | null>(null)
@@ -33,8 +40,19 @@ export function TaskCard({ task }: TaskCardProps) {
   const [blockingTasksCount, setBlockingTasksCount] = useState(0)
   const [isDraggingOver, setIsDraggingOver] = useState(false)
   const [dragFileCount, setDragFileCount] = useState(0)
-  const isOverdueTask = task.dueDate && !task.completed && isOverdue(task.dueDate)
   const { isVisible, elementRef } = useLazyLoad({ threshold: 0.1, rootMargin: '100px' })
+
+  // Memoize expensive computations
+  const isOverdueTask = useMemo(
+    () => task.dueDate && !task.completed && isOverdue(task.dueDate),
+    [task.dueDate, task.completed]
+  )
+
+  const priorityColors = useMemo(() => ({
+    low: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
+    medium: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300',
+    high: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
+  }), [])
 
   // Memoized function to load background image with caching
   const loadBackgroundImage = useCallback(async () => {
@@ -150,7 +168,8 @@ export function TaskCard({ task }: TaskCardProps) {
     checkBlockingStatus()
   }, [task.id, task.completed, checkIsBlocked, getBlockingTasks])
 
-  const handleFocus = () => {
+  // Memoize event handlers with useCallback
+  const handleFocus = useCallback(() => {
     if (task.completed) return
     setActiveTask(task.id)
     setMode('pomodoro')
@@ -159,24 +178,24 @@ export function TaskCard({ task }: TaskCardProps) {
     setTimeout(() => {
       startTimer()
     }, 100)
-  }
+  }, [task.completed, task.id, setActiveTask, setMode, navigate, startTimer])
 
-  const handleDragOver = (e: React.DragEvent) => {
+  const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
     if (!isTauri()) return
     setIsDraggingOver(true)
     setDragFileCount(e.dataTransfer.items.length)
-  }
+  }, [])
 
-  const handleDragLeave = (e: React.DragEvent) => {
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
     setIsDraggingOver(false)
     setDragFileCount(0)
-  }
+  }, [])
 
-  const handleDrop = async (e: React.DragEvent) => {
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
     setIsDraggingOver(false)
@@ -186,13 +205,28 @@ export function TaskCard({ task }: TaskCardProps) {
 
     // Show details modal to handle file attachments
     setDetailsOpen(true)
-  }
+  }, [])
 
-  const priorityColors = {
-    low: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
-    medium: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300',
-    high: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
-  }
+  const handleToggleComplete = useCallback(() => {
+    if (isBlocked && !task.completed) {
+      console.warn(`Cannot complete task "${task.title}": blocked by ${blockingTasksCount} incomplete task(s)`)
+      alert(`This task is blocked by ${blockingTasksCount} incomplete task(s). Complete the blocking tasks first.`)
+      return
+    }
+    toggleComplete(task.id).catch((error) => {
+      console.error('Failed to toggle task:', error)
+    })
+  }, [isBlocked, task.completed, task.title, task.id, blockingTasksCount, toggleComplete])
+
+  const handleDelete = useCallback(() => {
+    deleteTask(task.id).catch((error) => {
+      console.error('Failed to delete task:', error)
+    })
+  }, [task.id, deleteTask])
+
+  const handleOpenDetails = useCallback(() => {
+    setDetailsOpen(true)
+  }, [])
 
   return (
     <motion.div
@@ -222,6 +256,7 @@ export function TaskCard({ task }: TaskCardProps) {
         backgroundSize: 'cover',
         backgroundPosition: 'center',
         backgroundRepeat: 'no-repeat',
+        willChange: 'transform', // Hint browser to optimize for animations
       }}
     >
       {/* Background overlay for text readability */}
@@ -257,16 +292,7 @@ export function TaskCard({ task }: TaskCardProps) {
       <Checkbox.Root
         checked={task.completed}
         disabled={isBlocked && !task.completed}
-        onCheckedChange={() => {
-          if (isBlocked && !task.completed) {
-            console.warn(`Cannot complete task "${task.title}": blocked by ${blockingTasksCount} incomplete task(s)`)
-            alert(`This task is blocked by ${blockingTasksCount} incomplete task(s). Complete the blocking tasks first.`)
-            return
-          }
-          toggleComplete(task.id).catch((error) => {
-            console.error('Failed to toggle task:', error)
-          })
-        }}
+        onCheckedChange={handleToggleComplete}
         className={clsx(
           "focus-ring mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 border-border bg-background transition-all duration-200",
           isBlocked && !task.completed
@@ -290,7 +316,7 @@ export function TaskCard({ task }: TaskCardProps) {
 
       <div className="flex-1 min-w-0">
         <h3
-          onClick={() => setDetailsOpen(true)}
+          onClick={handleOpenDetails}
           className={clsx(
             'cursor-pointer text-sm font-medium hover:text-primary-500',
             task.completed ? 'text-muted-foreground line-through' : 'text-foreground'
@@ -378,11 +404,7 @@ export function TaskCard({ task }: TaskCardProps) {
             </motion.button>
           )}
           <motion.button
-            onClick={() => {
-              deleteTask(task.id).catch((error) => {
-                console.error('Failed to delete task:', error)
-              })
-            }}
+            onClick={handleDelete}
             whileHover={{ scale: 1.1 }}
             whileTap={{ scale: 0.95 }}
             className="focus-ring opacity-0 transition-opacity group-hover:opacity-100"
@@ -396,5 +418,22 @@ export function TaskCard({ task }: TaskCardProps) {
       <TaskDetailsModal task={task} open={detailsOpen} onOpenChange={setDetailsOpen} />
     </motion.div>
   )
-}
+}, (prevProps, nextProps) => {
+  // Custom comparison: only re-render if task data actually changed
+  const prev = prevProps.task
+  const next = nextProps.task
+  
+  return (
+    prev.id === next.id &&
+    prev.completed === next.completed &&
+    prev.title === next.title &&
+    prev.description === next.description &&
+    prev.priority === next.priority &&
+    prev.dueDate?.getTime() === next.dueDate?.getTime() &&
+    prev.recurrenceType === next.recurrenceType &&
+    prev.recurrenceInterval === next.recurrenceInterval &&
+    prev.tags?.length === next.tags?.length &&
+    prev.status === next.status
+  )
+})
 

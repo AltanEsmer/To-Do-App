@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { Calendar } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useTasks } from '../store/useTasks'
@@ -15,7 +15,7 @@ import { KeyboardShortcutsModal } from '../components/KeyboardShortcutsModal'
  */
 export function Dashboard() {
   const { t } = useTranslation()
-  const { tasks } = useTasks()
+  const tasks = useTasks((state) => state.tasks) // Selective subscription
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false)
 
@@ -24,9 +24,18 @@ export function Dashboard() {
     onShowShortcuts: () => setIsShortcutsOpen(true),
   })
 
-  const todayTasks = tasks.filter((task) => task.dueDate && isDateToday(task.dueDate))
-  const incompleteTodayTasks = todayTasks.filter((task) => !task.completed)
-  const completedCount = tasks.filter((task) => task.completed).length
+  // Memoize filtered tasks to avoid recalculation on every render
+  const { todayTasks, incompleteTodayTasks, completedCount } = useMemo(() => {
+    const todayFiltered = tasks.filter((task) => task.dueDate && isDateToday(task.dueDate))
+    const incompleteToday = todayFiltered.filter((task) => !task.completed)
+    const completed = tasks.filter((task) => task.completed).length
+    
+    return {
+      todayTasks: todayFiltered,
+      incompleteTodayTasks: incompleteToday,
+      completedCount: completed
+    }
+  }, [tasks])
 
   return (
     <div className="flex h-full flex-col">

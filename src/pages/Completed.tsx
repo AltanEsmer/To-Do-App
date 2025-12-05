@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { CheckCircle2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useTasks } from '../store/useTasks'
@@ -9,8 +10,13 @@ import { EmptyState } from '../components/EmptyState'
  */
 export function Completed() {
   const { t } = useTranslation()
-  const { tasks } = useTasks()
-  const completedTasks = tasks.filter((task) => task.completed)
+  const tasks = useTasks((state) => state.tasks) // Selective subscription
+  
+  // Memoize completed tasks
+  const completedTasks = useMemo(
+    () => tasks.filter((task) => task.completed),
+    [tasks]
+  )
 
   return (
     <div className="flex h-full flex-col">

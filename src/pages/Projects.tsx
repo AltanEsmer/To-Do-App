@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useMemo } from 'react'
 import { ListTodo } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useTasks } from '../store/useTasks'
@@ -18,17 +18,36 @@ import { useTaskFilters } from '../store/useTaskFilters'
  */
 export function Projects() {
   const { t } = useTranslation()
-  const { tasks } = useTasks()
+  const tasks = useTasks((state) => state.tasks) // Selective subscription
   const { resetFilters } = useTaskFilters()
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false)
+  const [incompletePageSize] = useState(50) // Show 50 tasks per section
+  const [completedPageSize] = useState(50)
+  const [showAllIncomplete, setShowAllIncomplete] = useState(false)
+  const [showAllCompleted, setShowAllCompleted] = useState(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
   const filterInputRef = useRef<HTMLButtonElement>(null)
   const sortInputRef = useRef<HTMLSelectElement>(null)
 
   const filteredTasks = useFilteredTasks(tasks)
-  const incompleteTasks = filteredTasks.filter((task) => !task.completed)
-  const completedTasks = filteredTasks.filter((task) => task.completed)
+  
+  // Memoize task splits to avoid recalculation
+  const { incompleteTasks, completedTasks } = useMemo(() => ({
+    incompleteTasks: filteredTasks.filter((task) => !task.completed),
+    completedTasks: filteredTasks.filter((task) => task.completed)
+  }), [filteredTasks])
+
+  // Paginated task lists
+  const visibleIncompleteTasks = useMemo(
+    () => showAllIncomplete ? incompleteTasks : incompleteTasks.slice(0, incompletePageSize),
+    [incompleteTasks, showAllIncomplete, incompletePageSize]
+  )
+  
+  const visibleCompletedTasks = useMemo(
+    () => showAllCompleted ? completedTasks : completedTasks.slice(0, completedPageSize),
+    [completedTasks, showAllCompleted, completedPageSize]
+  )
 
   useKeyboardShortcuts({
     onQuickAdd: () => setIsModalOpen(true),
@@ -69,10 +88,18 @@ export function Projects() {
           <div className="mb-6">
             <h3 className="mb-3 text-lg font-semibold text-foreground">{t('projects.activeTasks')}</h3>
             <div className="space-y-3">
-              {incompleteTasks.map((task) => (
+              {visibleIncompleteTasks.map((task) => (
                 <TaskCard key={task.id} task={task} />
               ))}
             </div>
+            {incompleteTasks.length > incompletePageSize && !showAllIncomplete && (
+              <button
+                onClick={() => setShowAllIncomplete(true)}
+                className="mt-4 w-full rounded-lg border border-border bg-card px-4 py-3 text-sm font-medium text-foreground transition-colors hover:bg-accent"
+              >
+                Show {incompleteTasks.length - incompletePageSize} more tasks...
+              </button>
+            )}
           </div>
         )}
 
@@ -80,10 +107,18 @@ export function Projects() {
           <div>
             <h3 className="mb-3 text-lg font-semibold text-foreground">{t('projects.completed')}</h3>
             <div className="space-y-3">
-              {completedTasks.map((task) => (
+              {visibleCompletedTasks.map((task) => (
                 <TaskCard key={task.id} task={task} />
               ))}
             </div>
+            {completedTasks.length > completedPageSize && !showAllCompleted && (
+              <button
+                onClick={() => setShowAllCompleted(true)}
+                className="mt-4 w-full rounded-lg border border-border bg-card px-4 py-3 text-sm font-medium text-foreground transition-colors hover:bg-accent"
+              >
+                Show {completedTasks.length - completedPageSize} more tasks...
+              </button>
+            )}
           </div>
         )}
 

@@ -9,9 +9,9 @@ import { Button } from '../components/ui/button'
 import * as Popover from '@radix-ui/react-popover'
 
 export function Kanban() {
-  const { tasks } = useTasks()
-  const { projects } = useProjects()
-  const { tags } = useTags()
+  const tasks = useTasks((state) => state.tasks) // Selective subscription
+  const projects = useProjects((state) => state.projects) // Selective subscription
+  const tags = useTags((state) => state.tags) // Selective subscription
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedProjects, setSelectedProjects] = useState<string[]>([])
   const [selectedTags, setSelectedTags] = useState<string[]>([])

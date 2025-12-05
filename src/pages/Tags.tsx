@@ -26,7 +26,11 @@ const PRESET_COLORS = [
 ]
 
 export function Tags() {
-  const { tags, loading, syncTags, createTag, deleteTag } = useTags()
+  const tags = useTags((state) => state.tags) // Selective subscription
+  const loading = useTags((state) => state.loading)
+  const syncTags = useTags((state) => state.syncTags)
+  const createTag = useTags((state) => state.createTag)
+  const deleteTag = useTags((state) => state.deleteTag)
   const { setSelectedTags } = useTaskFilters()
   const navigate = useNavigate()
   const { toast } = useToast()
