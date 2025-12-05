@@ -2,6 +2,7 @@ import { Moon, Sun } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useTheme } from '../utils/useTheme'
 import { XPBar } from './ui/XPBar'
+import { UndoRedoButtons } from './UndoRedoButtons'
 
 /**
  * Header component with app title, XP bar, theme toggle, and placeholder for user menu
@@ -19,6 +20,7 @@ export function Header() {
         </div>
       </div>
       <div className="flex items-center gap-4">
+        <UndoRedoButtons />
         <button
           onClick={toggleTheme}
           aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}

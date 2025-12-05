@@ -17,6 +17,8 @@ import {
 import { useTaskFilters } from '../store/useTaskFilters'
 import { useNavigate } from 'react-router-dom'
 import { useToast } from '../components/ui/use-toast'
+import { logger } from '../services/logger'
+import { errorHandler } from '../services/errorHandler'
 
 const PRESET_COLORS = [
   '#ef4444', '#f97316', '#f59e0b', '#eab308', '#84cc16',
@@ -48,20 +50,31 @@ export function Tags() {
     if (!tagName.trim()) return
 
     try {
+      logger.info('Creating new tag', { name: tagName.trim(), color: tagColor })
       await createTag({ name: tagName.trim(), color: tagColor })
       setTagName('')
       setTagColor(PRESET_COLORS[0])
       setDialogOpen(false)
+      logger.info('Tag created successfully')
     } catch (error) {
-      console.error('Failed to create tag:', error)
+      logger.error('Failed to create tag:', error)
+      errorHandler.handleError(error, { action: 'createTag', tagName })
     }
   }
 
   const handleDeleteTag = async (tagId: string) => {
     try {
+      logger.info('Deleting tag', { tagId })
       await deleteTag(tagId)
+      logger.info('Tag deleted successfully', { tagId })
+      toast({
+        title: 'Tag deleted',
+        description: 'The tag has been removed successfully.',
+        variant: 'default',
+      })
     } catch (error) {
-      console.error('Failed to delete tag:', error)
+      logger.error('Failed to delete tag:', error)
+      errorHandler.handleError(error, { action: 'deleteTag', tagId })
     }
   }
 
@@ -262,14 +275,20 @@ export function Tags() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => handleViewTasksWithTag(tag.id)}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleViewTasksWithTag(tag.id)
+                      }}
                     >
                       View Tasks
                     </Button>
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => handleDeleteTag(tag.id)}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleDeleteTag(tag.id)
+                      }}
                       disabled={tag.usage_count > 0}
                       title={
                         tag.usage_count > 0

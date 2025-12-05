@@ -6,6 +6,9 @@ import { useTasks, Task, TaskPriority, RecurrenceType } from '../store/useTasks'
 import { useProjects } from '../store/useProjects'
 import { useKeyboardShortcuts } from '../utils/useKeyboardShortcuts'
 import { getNextOccurrenceDate, formatRecurrencePattern, formatTaskDate } from '../utils/dateHelpers'
+import { UpdateTaskCommand } from '../commands/taskCommands'
+import { commandHistory } from '../utils/commandPattern'
+import { logger } from '../services/logger'
 
 interface EditTaskModalProps {
   task: Task | null
@@ -18,7 +21,7 @@ interface EditTaskModalProps {
  * Includes accessibility features: focus trap, escape key, ARIA labels
  */
 export function EditTaskModal({ task, open, onOpenChange }: EditTaskModalProps) {
-  const { updateTask } = useTasks()
+  const tasksStore = useTasks()
   const { projects, addProject, syncProjects } = useProjects()
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -46,7 +49,14 @@ export function EditTaskModal({ task, open, onOpenChange }: EditTaskModalProps) 
     if (task && open) {
       setTitle(task.title)
       setDescription(task.description || '')
-      setDueDate(task.dueDate ? task.dueDate.toISOString().split('T')[0] : '')
+      if (task.dueDate) {
+        const dateStr = task.dueDate.toISOString().split('T')[0]
+        if (dateStr) {
+          setDueDate(dateStr)
+        }
+      } else {
+        setDueDate('')
+      }
       setPriority(task.priority)
       setProjectId(task.projectId || '')
       setRecurrenceType(task.recurrenceType)
@@ -78,22 +88,27 @@ export function EditTaskModal({ task, open, onOpenChange }: EditTaskModalProps) 
     if (!task || !title.trim()) return
 
     try {
-      await updateTask(task.id, {
-        title: title.trim(),
-        description: description.trim() || undefined,
-        dueDate: dueDate ? new Date(dueDate) : undefined,
-        priority,
-        projectId: projectId || undefined,
-        recurrenceType,
-        recurrenceInterval,
-        reminderMinutesBefore: reminderMinutesBefore || undefined,
-        notificationRepeat,
-      })
+      const command = new UpdateTaskCommand(
+        task.id,
+        {
+          title: title.trim(),
+          description: description.trim() || undefined,
+          dueDate: dueDate ? new Date(dueDate) : undefined,
+          priority,
+          projectId: projectId || undefined,
+          recurrenceType,
+          recurrenceInterval,
+          reminderMinutesBefore: reminderMinutesBefore || undefined,
+          notificationRepeat,
+        },
+        tasksStore
+      )
+
+      await commandHistory.execute(command)
 
       onOpenChange(false)
     } catch (error) {
-      console.error('Failed to update task:', error)
-      // Could show an error toast here
+      logger.error('Failed to update task:', error)
     }
   }
 

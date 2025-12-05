@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import * as tauriAdapter from '../api/tauriAdapter'
+import { errorHandler } from '../services/errorHandler'
+import { logger } from '../services/logger'
 
 export type TaskPriority = 'low' | 'medium' | 'high'
 
@@ -80,11 +82,14 @@ export const useTasks = create<TasksState>()(
       syncTasks: async () => {
     set({ loading: true, error: null })
     try {
+      logger.info('Syncing tasks from backend')
       const rustTasks = await tauriAdapter.getTasks()
       const tasks = rustTasks.map(convertTask)
       set({ tasks, loading: false })
+      logger.info(`Successfully synced ${tasks.length} tasks`)
     } catch (error) {
-      console.error('Error syncing tasks:', error)
+      logger.error('Error syncing tasks:', error)
+      errorHandler.handleError(error, { action: 'syncTasks' })
       set({
         error: error instanceof Error ? error.message : 'Failed to sync tasks',
         loading: false,
@@ -94,6 +99,7 @@ export const useTasks = create<TasksState>()(
 
   addTask: async (taskData) => {
     try {
+      logger.info('Creating new task', { title: taskData.title })
       const rustTask = await tauriAdapter.createTask({
         title: taskData.title,
         description: taskData.description,
@@ -109,7 +115,10 @@ export const useTasks = create<TasksState>()(
       set((state) => ({
         tasks: [...state.tasks, newTask],
       }))
+      logger.info('Task created successfully', { id: newTask.id })
     } catch (error) {
+      logger.error('Failed to create task:', error)
+      errorHandler.handleError(error, { action: 'addTask', taskTitle: taskData.title })
       set({
         error: error instanceof Error ? error.message : 'Failed to create task',
       })
@@ -133,6 +142,7 @@ export const useTasks = create<TasksState>()(
     }
 
     try {
+      logger.info('Updating task', { id, updates })
       const rustTask = await tauriAdapter.updateTask(id, {
         title: updates.title,
         description: updates.description,
@@ -153,9 +163,12 @@ export const useTasks = create<TasksState>()(
       set((state) => ({
         tasks: state.tasks.map((task) => (task.id === id ? updatedTask : task)),
       }))
+      logger.info('Task updated successfully', { id })
     } catch (error) {
+      logger.error('Failed to update task:', error)
       // Rollback optimistic update on error
       set({ tasks: previousTasks })
+      errorHandler.handleError(error, { action: 'updateTask', taskId: id })
       set({
         error: error instanceof Error ? error.message : 'Failed to update task',
       })
@@ -211,6 +224,8 @@ export const useTasks = create<TasksState>()(
         }
       }
     } catch (error) {
+      logger.error('Failed to toggle task:', error)
+      errorHandler.handleError(error, { action: 'toggleComplete', taskId: id })
       set({
         error: error instanceof Error ? error.message : 'Failed to toggle task',
       })
@@ -220,11 +235,15 @@ export const useTasks = create<TasksState>()(
 
   deleteTask: async (id) => {
     try {
+      logger.info('Deleting task', { id })
       await tauriAdapter.deleteTask(id)
       set((state) => ({
         tasks: state.tasks.filter((task) => task.id !== id),
       }))
+      logger.info('Task deleted successfully', { id })
     } catch (error) {
+      logger.error('Failed to delete task:', error)
+      errorHandler.handleError(error, { action: 'deleteTask', taskId: id })
       set({
         error: error instanceof Error ? error.message : 'Failed to delete task',
       })
@@ -246,6 +265,8 @@ export const useTasks = create<TasksState>()(
         tasks: state.tasks.map((task) => (task.id === taskId ? updatedTask : task)),
       }))
     } catch (error) {
+      logger.error('Failed to add tag to task:', error)
+      errorHandler.handleError(error, { action: 'addTagToTask', taskId, tagId })
       set({
         error: error instanceof Error ? error.message : 'Failed to add tag to task',
       })
@@ -263,6 +284,8 @@ export const useTasks = create<TasksState>()(
         tasks: state.tasks.map((task) => (task.id === taskId ? updatedTask : task)),
       }))
     } catch (error) {
+      logger.error('Failed to remove tag from task:', error)
+      errorHandler.handleError(error, { action: 'removeTagFromTask', taskId, tagId })
       set({
         error: error instanceof Error ? error.message : 'Failed to remove tag from task',
       })
@@ -275,7 +298,7 @@ export const useTasks = create<TasksState>()(
       const rustTasks = await tauriAdapter.getRelatedTasks(taskId)
       return rustTasks.map(convertTask)
     } catch (error) {
-      console.error('Failed to get related tasks:', error)
+      logger.error('Failed to get related tasks:', error)
       return []
     }
   },
@@ -285,7 +308,7 @@ export const useTasks = create<TasksState>()(
       const rustTasks = await tauriAdapter.getBlockingTasks(taskId)
       return rustTasks.map(convertTask)
     } catch (error) {
-      console.error('Failed to get blocking tasks:', error)
+      logger.error('Failed to get blocking tasks:', error)
       return []
     }
   },
@@ -295,7 +318,7 @@ export const useTasks = create<TasksState>()(
       const rustTasks = await tauriAdapter.getBlockedTasks(taskId)
       return rustTasks.map(convertTask)
     } catch (error) {
-      console.error('Failed to get blocked tasks:', error)
+      logger.error('Failed to get blocked tasks:', error)
       return []
     }
   },
@@ -305,7 +328,7 @@ export const useTasks = create<TasksState>()(
       const blockingTasks = await tauriAdapter.getBlockingTasks(taskId)
       return blockingTasks.some(task => !task.completed)
     } catch (error) {
-      console.error('Failed to check if task is blocked:', error)
+      logger.error('Failed to check if task is blocked:', error)
       return false
     }
   },
@@ -314,7 +337,7 @@ export const useTasks = create<TasksState>()(
     try {
       return await tauriAdapter.checkCircularDependency(blockingTaskId, blockedTaskId)
     } catch (error) {
-      console.error('Failed to check circular dependency:', error)
+      logger.error('Failed to check circular dependency:', error)
       return false
     }
   },

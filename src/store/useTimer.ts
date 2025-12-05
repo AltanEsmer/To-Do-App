@@ -28,6 +28,7 @@ interface TimerState {
   startTimer: () => void
   pauseTimer: () => void
   resetTimer: () => void
+  skipTimer: () => Promise<void>
   setMode: (mode: TimerMode) => void
   setActiveTask: (taskId: string | null) => void
   _tick: () => void
@@ -117,6 +118,21 @@ export const useTimer = create<TimerState>()(
           startTime: null,
           initialTimeLeft: newTimeLeft
         })
+      },
+
+      skipTimer: async () => {
+        let state = get()
+        if (state.status === 'idle') {
+           state.startTimer()
+           state = get()
+        }
+        
+        const now = Date.now()
+        // Set start time to past to force completion
+        const newStartTime = now - (state.initialTimeLeft * 1000) - 500
+        
+        set({ status: 'running', startTime: newStartTime })
+        await get().syncTimer()
       },
 
       setMode: (mode: TimerMode) => {

@@ -7,6 +7,9 @@ import { useKeyboardShortcuts } from '../utils/useKeyboardShortcuts'
 import { TemplatesModal } from './TemplatesModal'
 import * as tauriAdapter from '../api/tauriAdapter'
 import { getNextOccurrenceDate, formatRecurrencePattern, formatTaskDate } from '../utils/dateHelpers'
+import { CreateTaskCommand } from '../commands/taskCommands'
+import { commandHistory } from '../utils/commandPattern'
+import { logger } from '../services/logger'
 
 interface AddTaskModalProps {
   open: boolean
@@ -18,7 +21,7 @@ interface AddTaskModalProps {
  * Includes accessibility features: focus trap, escape key, ARIA labels
  */
 export function AddTaskModal({ open, onOpenChange }: AddTaskModalProps) {
-  const { addTask } = useTasks()
+  const tasksStore = useTasks()
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [dueDate, setDueDate] = useState('')
@@ -61,17 +64,22 @@ export function AddTaskModal({ open, onOpenChange }: AddTaskModalProps) {
     }
 
     try {
-      await addTask({
-        title: title.trim(),
-        description: description.trim() || undefined,
-        dueDate: dueDate ? new Date(dueDate) : undefined,
-        priority,
-        completed: false,
-        recurrenceType,
-        recurrenceInterval,
-        reminderMinutesBefore: reminderMinutesBefore || undefined,
-        notificationRepeat,
-      })
+      const command = new CreateTaskCommand(
+        {
+          title: title.trim(),
+          description: description.trim() || undefined,
+          dueDate: dueDate ? new Date(dueDate) : undefined,
+          priority,
+          completed: false,
+          recurrenceType,
+          recurrenceInterval,
+          reminderMinutesBefore: reminderMinutesBefore || undefined,
+          notificationRepeat,
+        },
+        tasksStore
+      )
+
+      await commandHistory.execute(command)
 
       // Reset form
       setTitle('')
@@ -85,8 +93,7 @@ export function AddTaskModal({ open, onOpenChange }: AddTaskModalProps) {
       setNotificationRepeat(false)
       onOpenChange(false)
     } catch (error) {
-      console.error('Failed to add task:', error)
-      // Could show an error toast here
+      logger.error('Failed to add task:', error)
     }
   }
 

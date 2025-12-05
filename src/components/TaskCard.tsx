@@ -13,6 +13,9 @@ import { isTauri } from '../utils/tauri'
 import { TagBadge } from './TagBadge'
 import { imageCache } from '../utils/imageCache'
 import { useLazyLoad } from '../hooks/useLazyLoad'
+import { ToggleTaskCommand, DeleteTaskCommand } from '../commands/taskCommands'
+import { commandHistory } from '../utils/commandPattern'
+import { logger } from '../services/logger'
 
 interface TaskCardProps {
   task: Task
@@ -23,8 +26,7 @@ interface TaskCardProps {
  */
 export const TaskCard = memo(function TaskCard({ task }: TaskCardProps) {
   // Use selective Zustand subscriptions for better performance
-  const toggleComplete = useTasks((state) => state.toggleComplete)
-  const deleteTask = useTasks((state) => state.deleteTask)
+  const tasksStore = useTasks()
   const getRelatedTasks = useTasks((state) => state.getRelatedTasks)
   const checkIsBlocked = useTasks((state) => state.checkIsBlocked)
   const getBlockingTasks = useTasks((state) => state.getBlockingTasks)
@@ -142,7 +144,7 @@ export const TaskCard = memo(function TaskCard({ task }: TaskCardProps) {
         const related = await getRelatedTasks(task.id)
         setHasRelatedTasks(related.length > 0)
       } catch (error) {
-        console.error('Failed to check relationships:', error)
+        logger.error('Failed to check relationships:', error)
       }
     }
     checkRelationships()
@@ -162,7 +164,7 @@ export const TaskCard = memo(function TaskCard({ task }: TaskCardProps) {
           setBlockingTasksCount(0)
         }
       } catch (error) {
-        console.error('Failed to check blocking status:', error)
+        logger.error('Failed to check blocking status:', error)
       }
     }
     checkBlockingStatus()
@@ -207,22 +209,28 @@ export const TaskCard = memo(function TaskCard({ task }: TaskCardProps) {
     setDetailsOpen(true)
   }, [])
 
-  const handleToggleComplete = useCallback(() => {
+  const handleToggleComplete = useCallback(async () => {
     if (isBlocked && !task.completed) {
-      console.warn(`Cannot complete task "${task.title}": blocked by ${blockingTasksCount} incomplete task(s)`)
+      logger.warn(`Cannot complete task "${task.title}": blocked by ${blockingTasksCount} incomplete task(s)`)
       alert(`This task is blocked by ${blockingTasksCount} incomplete task(s). Complete the blocking tasks first.`)
       return
     }
-    toggleComplete(task.id).catch((error) => {
-      console.error('Failed to toggle task:', error)
-    })
-  }, [isBlocked, task.completed, task.title, task.id, blockingTasksCount, toggleComplete])
+    try {
+      const command = new ToggleTaskCommand(task.id, tasksStore)
+      await commandHistory.execute(command)
+    } catch (error) {
+      logger.error('Failed to toggle task:', error)
+    }
+  }, [isBlocked, task.completed, task.title, task.id, blockingTasksCount, tasksStore])
 
-  const handleDelete = useCallback(() => {
-    deleteTask(task.id).catch((error) => {
-      console.error('Failed to delete task:', error)
-    })
-  }, [task.id, deleteTask])
+  const handleDelete = useCallback(async () => {
+    try {
+      const command = new DeleteTaskCommand(task.id, tasksStore)
+      await commandHistory.execute(command)
+    } catch (error) {
+      logger.error('Failed to delete task:', error)
+    }
+  }, [task.id, tasksStore])
 
   const handleOpenDetails = useCallback(() => {
     setDetailsOpen(true)
