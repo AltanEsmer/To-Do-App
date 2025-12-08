@@ -30,7 +30,9 @@ interface CompletionStats {
   count: number
 }
 
-type PriorityDistribution = tauriAdapter.PriorityDistribution
+type PriorityDistribution = tauriAdapter.PriorityDistribution & {
+  [key: string]: string | number
+}
 
 interface ProjectStats {
   project_id: string | null
