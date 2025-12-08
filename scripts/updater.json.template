@@ -1,0 +1,23 @@
+{
+  "version": "REPLACE_WITH_VERSION",
+  "notes": "REPLACE_WITH_RELEASE_NOTES",
+  "pub_date": "REPLACE_WITH_ISO_DATE",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "REPLACE_WITH_SIGNATURE_CONTENT",
+      "url": "https://github.com/YOUR_USERNAME/YOUR_REPO/releases/download/vREPLACE_WITH_VERSION/TodoApp_REPLACE_WITH_VERSION_x64_en-US.msi"
+    },
+    "darwin-x86_64": {
+      "signature": "REPLACE_WITH_SIGNATURE_CONTENT",
+      "url": "https://github.com/YOUR_USERNAME/YOUR_REPO/releases/download/vREPLACE_WITH_VERSION/TodoApp.app.tar.gz"
+    },
+    "darwin-aarch64": {
+      "signature": "REPLACE_WITH_SIGNATURE_CONTENT",
+      "url": "https://github.com/YOUR_USERNAME/YOUR_REPO/releases/download/vREPLACE_WITH_VERSION/TodoApp.app.tar.gz"
+    },
+    "linux-x86_64": {
+      "signature": "REPLACE_WITH_SIGNATURE_CONTENT",
+      "url": "https://github.com/YOUR_USERNAME/YOUR_REPO/releases/download/vREPLACE_WITH_VERSION/todo-app_REPLACE_WITH_VERSION_amd64.AppImage"
+    }
+  }
+}

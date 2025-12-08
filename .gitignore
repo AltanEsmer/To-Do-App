@@ -31,3 +31,7 @@ src-tauri/Cargo.lock
 .env
 .env.local
 
+# Signing keys
+*.key
+.tauri/
+
