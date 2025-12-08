@@ -15,20 +15,22 @@ import { sortableKeyboardCoordinates } from '@dnd-kit/sortable'
 import { Task, TaskStatus, useTasks } from '../../store/useTasks'
 import { KanbanColumn } from './KanbanColumn'
 import { KanbanTaskCard } from './KanbanTaskCard'
+import { useTranslation } from 'react-i18next'
 
 interface KanbanBoardProps {
   tasks: Task[]
 }
 
-const COLUMNS: { id: TaskStatus; title: string; color: string }[] = [
-  { id: 'todo', title: 'To Do', color: 'bg-blue-500' },
-  { id: 'in_progress', title: 'In Progress', color: 'bg-yellow-500' },
-  { id: 'done', title: 'Done', color: 'bg-green-500' },
-]
-
 export function KanbanBoard({ tasks }: KanbanBoardProps) {
   const { updateTask } = useTasks()
+  const { t } = useTranslation()
   const [activeTask, setActiveTask] = useState<Task | null>(null)
+
+  const COLUMNS: { id: TaskStatus; title: string; color: string }[] = [
+    { id: 'todo', title: t('kanban.todo'), color: 'bg-blue-500' },
+    { id: 'in_progress', title: t('kanban.inProgress'), color: 'bg-yellow-500' },
+    { id: 'done', title: t('kanban.done'), color: 'bg-green-500' },
+  ]
 
   const sensors = useSensors(
     useSensor(PointerSensor, {

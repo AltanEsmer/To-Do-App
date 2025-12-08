@@ -1,329 +1,535 @@
-## Cursor Task — Add Task Relationships & Tags System
+# Finalize Phase Ticket
 
-### Context
-Existing app: React + TypeScript frontend using shadcn/ui + Tailwind; Tauri (Rust) backend using SQLite. Currently tasks support projects, priorities, due dates, and attachments. Implement a comprehensive **tags and task relationships system** that allows users to:
-1. Create and assign tags to tasks with auto-suggestions
-2. Link related tasks (associations, not dependencies)
-3. View related tasks in task details
-4. Filter and group tasks by tags
+## Overview
+This ticket covers the finalization phase before release, focusing on two critical areas:
+1. **Translation Improvements** - Ensure all pages have proper translations and improve translation quality
+2. **Pre-Release Testing** - Comprehensive testing to ensure app stability and reliability
 
-### Goals (strict)
+---
 
-#### 1. Database Schema
-- Create migration `0010_add_tags_and_relationships.sql` with:
-  - `tags` table: id, name (unique, lowercase), color, created_at, usage_count
-  - `task_tags` junction table: id, task_id, tag_id, created_at (unique on task_id+tag_id)
-  - `task_relationships` table: id, task_id_1, task_id_2, relationship_type, created_at (unique on task_id_1+task_id_2)
-  - Proper indexes and foreign keys with CASCADE deletes
+## 1. Translation Improvements & Application
 
-#### 2. Backend Rust Commands (src-tauri/src/commands.rs)
-Implement the following Tauri commands:
-- `get_all_tags() -> Result<Vec<Tag>, String>` - Get all tags sorted by usage_count DESC
-- `get_task_tags(task_id: String) -> Result<Vec<Tag>, String>` - Get tags for a task
-- `create_tag(input: CreateTagInput) -> Result<Tag, String>` - Create tag (normalize name, handle duplicates)
-- `delete_tag(tag_id: String) -> Result<(), String>` - Delete tag and associations
-- `add_tag_to_task(task_id: String, tag_id: String) -> Result<(), String>` - Associate tag with task, increment usage
-- `remove_tag_from_task(task_id: String, tag_id: String) -> Result<(), String>` - Remove association, decrement usage
-- `get_suggested_tags(search: String) -> Result<Vec<Tag>, String>` - Search tags (LIKE query, limit 10)
-- `create_task_relationship(input: CreateRelationshipInput) -> Result<TaskRelationship, String>` - Create bidirectional relationship
-- `delete_task_relationship(relationship_id: String) -> Result<(), String>` - Delete relationship
-- `get_related_tasks(task_id: String) -> Result<Vec<Task>, String>` - Get all related tasks
-- `get_tasks_by_tag(tag_id: String) -> Result<Vec<Task>, String>` - Get tasks with tag
-- `get_tasks_by_tags(tag_ids: Vec<String>) -> Result<Vec<Task>, String>` - Get tasks with ANY of the tags (OR logic)
+### 1.1 Current State Analysis
+- **Existing Translation System**: i18next with English (en) and Turkish (tr) support
+- **Translation Files**: 
+  - `src/locales/en/common.json` (109 keys)
+  - `src/locales/tr/common.json` (109 keys)
+- **Pages**: Dashboard, Projects, Completed, Kanban, Tags, Statistics, Pomodoro, Settings
+- **Task Content Translation**: Backend translation service for task titles/descriptions (Google Translate API / LibreTranslate)
 
-Update existing commands:
-- `get_task()` - Include `tags: Vec<Tag>` in Task response
-- `get_tasks()` - Support filtering by `tag_id` in TaskFilter
+### 1.2 Translation Quality Review
 
-#### 3. Frontend Types & API (src/api/tauriAdapter.ts)
-- Add `Tag`, `TaskRelationship`, `CreateTagInput`, `CreateRelationshipInput` interfaces
-- Update `Task` interface to include optional `tags?: Tag[]` field
-- Add API adapter functions for all backend commands above
-- Use `safeInvoke` pattern with browser mode fallbacks
+#### Tasks:
+- [ ] **Review English translations**
+  - Check for consistency in terminology
+  - Ensure proper grammar and spelling
+  - Verify all technical terms are clear
+  - Review tone and user-friendliness
 
-#### 4. State Management
-- Create `src/store/useTags.ts` Zustand store:
-  - State: tags array, loading, error
-  - Methods: syncTags, createTag, deleteTag, getSuggestedTags
-- Update `src/store/useTasks.ts`:
-  - Add methods: addTagToTask, removeTagFromTask, getRelatedTasks
-  - Update Task type to include tags
+- [ ] **Review Turkish translations**
+  - Verify accuracy of translations
+  - Check for consistency with English version
+  - Ensure proper Turkish grammar and spelling
+  - Verify technical terms are appropriately translated
+  - Check for cultural appropriateness
 
-#### 5. UI Components
+- [ ] **Improve translation quality**
+  - Fix any awkward phrasings
+  - Ensure consistent terminology across all keys
+  - Improve clarity where needed
+  - Add context comments if necessary
 
-**Create `src/components/TagInput.tsx`:**
-- Multi-select tag input with autocomplete
-- Shows existing tags as suggestions while typing (debounced 300ms)
-- Allows creating new tags on the fly
-- Displays selected tags as removable chips/badges
-- Uses shadcn/ui: Badge, Input, Popover, Button
-- Optional color picker for new tags
+### 1.3 Apply Translations to All Pages
 
-**Create `src/components/TagBadge.tsx`:**
-- Reusable tag display component
-- Shows tag name with optional color background
-- Clickable to filter tasks by tag
-- Shows usage count on hover (optional)
+#### Pages to Review:
+- [ ] **Dashboard** (`src/pages/Dashboard.tsx`)
+  - Verify all text uses translation keys
+  - Check for any hardcoded strings
+  - Ensure empty states are translated
 
-**Create `src/components/RelatedTasksPanel.tsx`:**
-- Side panel/section showing related tasks
-- Displays related tasks using TaskCard components
-- "Add Relationship" button with relationship type selector
-- Relationship types: 'related', 'similar', 'follows', 'blocks'
+- [ ] **Projects/All Tasks** (`src/pages/Projects.tsx`)
+  - Verify filter labels use translations
+  - Check task list empty states
+  - Ensure action buttons are translated
 
-**Update `src/components/TaskDetailsModal.tsx`:**
-- Add "Tags" section with TagInput component
-- Add "Related Tasks" section with RelatedTasksPanel
-- Show tags as badges below task title
-- Allow adding/removing tags inline
+- [ ] **Completed** (`src/pages/Completed.tsx`)
+  - Verify page title and subtitle
+  - Check empty state messages
+  - Ensure task actions are translated
 
-**Update `src/components/TaskCard.tsx`:**
-- Display tags as small badges below task title
-- Click tag to filter tasks by that tag
-- Show relationship indicator icon if task has relationships
+- [ ] **Kanban** (`src/pages/Kanban.tsx`)
+  - Verify column headers use translations
+  - Check empty state messages
+  - Ensure drag-and-drop feedback messages
 
-**Update `src/components/AddTaskModal.tsx` and `src/components/EditTaskModal.tsx`:**
-- Add TagInput component for tag selection
-- Pre-populate with existing tags if editing
+- [ ] **Tags** (`src/pages/Tags.tsx`)
+  - Verify tag management UI is translated
+  - Check empty states
+  - Ensure tag-related actions are translated
 
-#### 6. Filtering & Grouping
+- [ ] **Statistics** (`src/pages/Statistics.tsx`)
+  - Verify chart labels use translations
+  - Check date range selectors
+  - Ensure export messages are translated
+  - Verify metric labels and descriptions
 
-**Update `src/store/useTaskFilters.ts`:**
-- Add `selectedTags: string[]` to filter state
-- Add `groupByTag: boolean` option
-- Add `showRelatedOnly: boolean` option
+- [ ] **Pomodoro** (`src/pages/Pomodoro.tsx`)
+  - Verify timer labels and buttons
+  - Check completion dialog messages
+  - Ensure task selection UI is translated
 
-**Update `src/utils/useFilteredTasks.ts`:**
-- Filter tasks by selected tags (AND logic: task must have ALL selected tags)
-- Group tasks by tag when `groupByTag` is enabled
-- Show related tasks when `showRelatedOnly` is enabled
-- Tasks with multiple tags appear in multiple groups
+- [ ] **Settings** (`src/pages/Settings.tsx`)
+  - Verify all setting labels
+  - Check help text and descriptions
+  - Ensure notification messages are translated
 
-**Create `src/pages/Tags.tsx`:**
-- New page showing all tags
-- Tag cloud visualization (size based on usage_count)
-- Click tag to see all tasks with that tag
-- Tag management (create, edit, delete, change color)
-- Statistics per tag (task count, completion rate)
+#### Components to Review:
+- [ ] **TaskDetailsModal** (`src/components/TaskDetailsModal.tsx`)
+  - Verify all modal sections use translations
+  - Check attachment labels
+  - Ensure date/time pickers are translated
+  - Verify notification settings labels
 
-#### 7. Smart Grouping UI
-- Add "Group by Tag" toggle in filter bar
-- When enabled, group tasks under tag headers
-- Collapsible tag sections
-- Tag filter chips showing selected tags with "Clear all" button
-- Tag count badges showing how many tasks match
+- [ ] **AddTaskModal** (`src/components/AddTaskModal.tsx`)
+  - Verify form labels and placeholders
+  - Check validation messages
+  - Ensure action buttons are translated
 
-#### 8. Auto-Suggestions
-- Tag suggestions: Show matching tags from `get_suggested_tags` while typing
-- Sort by usage_count (most used first)
-- Show "Create new tag: [name]" option if no match
-- Relationship suggestions: Suggest based on similar tags, same project, similar titles
+- [ ] **EditTaskModal** (`src/components/EditTaskModal.tsx`)
+  - Verify form labels match AddTaskModal
+  - Check validation messages
+  - Ensure action buttons are translated
 
-### Data Structures
+- [ ] **TaskCard** (`src/components/TaskCard.tsx`)
+  - Verify priority labels
+  - Check date formatting (if applicable)
+  - Ensure action tooltips are translated
 
-**Rust (commands.rs):**
-```rust
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Tag {
-    pub id: String,
-    pub name: String,
-    pub color: Option<String>,
-    pub created_at: i64,
-    pub usage_count: i32,
-}
+- [ ] **FilterBar** (`src/components/FilterBar.tsx`)
+  - Verify filter labels
+  - Check dropdown options
+  - Ensure sort options are translated
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TaskRelationship {
-    pub id: String,
-    pub task_id_1: String,
-    pub task_id_2: String,
-    pub relationship_type: String, // 'related', 'similar', 'follows', 'blocks'
-    pub created_at: i64,
-}
+- [ ] **SearchBar** (`src/components/SearchBar.tsx`)
+  - Verify placeholder text
+  - Check search feedback messages
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct CreateTagInput {
-    pub name: String,
-    pub color: Option<String>,
-}
+- [ ] **Sidebar** (`src/components/Sidebar.tsx`)
+  - Verify navigation labels
+  - Check project/tag lists if applicable
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct CreateRelationshipInput {
-    pub task_id_1: String,
-    pub task_id_2: String,
-    pub relationship_type: Option<String>,
-}
-```
+- [ ] **Header** (`src/components/Header.tsx`)
+  - Verify app title
+  - Check action buttons
 
-**TypeScript (tauriAdapter.ts):**
-```typescript
-export interface Tag {
-  id: string;
-  name: string;
-  color?: string;
-  created_at: number;
-  usage_count: number;
-}
+- [ ] **EmptyState** (`src/components/EmptyState.tsx`)
+  - Verify all empty state messages
+  - Check action button labels
 
-export interface TaskRelationship {
-  id: string;
-  task_id_1: string;
-  task_id_2: string;
-  relationship_type: string;
-  created_at: number;
-}
+- [ ] **KeyboardShortcutsModal** (`src/components/KeyboardShortcutsModal.tsx`)
+  - Verify shortcut descriptions
+  - Check category labels
 
-export interface CreateTagInput {
-  name: string;
-  color?: string;
-}
+- [ ] **TemplatesModal** (`src/components/TemplatesModal.tsx`)
+  - Verify template management UI
+  - Check action buttons
 
-export interface CreateRelationshipInput {
-  task_id_1: string;
-  task_id_2: string;
-  relationship_type?: string;
-}
-```
+- [ ] **RankPanel** (`src/components/RankPanel.tsx`)
+  - Verify rank labels and descriptions
+  - Check XP and level labels
 
-### Files to modify / add
+- [ ] **RelatedTasksPanel** (`src/components/RelatedTasksPanel.tsx`)
+  - Verify panel title
+  - Check relationship type labels
 
-**Backend:**
-- `src-tauri/migrations/0010_add_tags_and_relationships.sql` - New migration file
-- `src-tauri/src/commands.rs` - Add all tag/relationship commands
-- `src-tauri/src/db.rs` - Update migration list, add helper functions if needed
+- [ ] **Kanban Components** (`src/components/kanban/`)
+  - Verify column headers
+  - Check drag-and-drop messages
+  - Ensure task card labels
 
-**Frontend:**
-- `src/api/tauriAdapter.ts` - Add types and API functions
-- `src/store/useTags.ts` - New Zustand store for tags
-- `src/store/useTasks.ts` - Update with tag methods
-- `src/store/useTaskFilters.ts` - Add tag filtering options
-- `src/utils/useFilteredTasks.ts` - Add tag filtering logic
-- `src/components/TagInput.tsx` - New component
-- `src/components/TagBadge.tsx` - New component
-- `src/components/RelatedTasksPanel.tsx` - New component
-- `src/components/TaskDetailsModal.tsx` - Add tags and relationships sections
-- `src/components/TaskCard.tsx` - Display tags
-- `src/components/AddTaskModal.tsx` - Add tag input
-- `src/components/EditTaskModal.tsx` - Add tag input
-- `src/pages/Tags.tsx` - New tags management page
-- Update routing in `src/App.tsx` to include Tags page
+- [ ] **Timer Components** (`src/components/timer/`)
+  - Verify timer labels
+  - Check sound control labels
+  - Ensure stats labels
 
-### UX details & accessibility
+- [ ] **UI Components** (`src/components/ui/`)
+  - Verify badge labels
+  - Check dialog titles
+  - Ensure toast messages use translations
 
-- Tag input: Support comma-separated input for quick tag addition
-- Keyboard shortcuts:
-  - `#` to focus tag input
-  - `Tab` to accept tag suggestion
-  - `Backspace` to remove last tag
-- Visual feedback: Animate tag additions/removals with Framer Motion
-- Empty states: Show helpful messages when no tags/relationships exist
-- Accessibility: Proper ARIA labels, keyboard navigation, focus management
-- Tag colors: Use predefined palette or allow custom hex colors
-- Tag suggestions: Limit to 10-20 most relevant results
-- Relationship creation: Prevent self-relationships and duplicates
-- Performance: Cache tag list, lazy load related tasks
+### 1.4 Add Missing Translation Keys
 
-### Backend spec (Tauri / Rust)
+#### Tasks:
+- [ ] **Audit all components** for hardcoded strings
+- [ ] **Create missing translation keys** for:
+  - Error messages
+  - Success messages
+  - Validation messages
+  - Tooltips
+  - Placeholder text
+  - Button labels
+  - Dialog titles
+  - Empty state messages
+  - Loading states
+  - Date/time formats (if needed)
 
-**Key Implementation Details:**
-- Tag names: Normalize to lowercase, trim whitespace
-- Tag creation: If tag exists, return existing tag and increment usage_count
-- Tag deletion: CASCADE delete removes all task_tag associations
-- Relationship creation: Prevent task_id_1 == task_id_2 (self-relationships)
-- Relationship uniqueness: Enforce unique constraint on (task_id_1, task_id_2)
-- Tag search: Case-insensitive LIKE query, sorted by usage_count DESC
-- Task filtering: Support filtering by single tag_id in TaskFilter
-- Tag usage tracking: Increment on add, decrement on remove (but don't delete tag)
+- [ ] **Add keys to both** `en/common.json` and `tr/common.json`
+- [ ] **Ensure consistent naming** convention (e.g., `component.section.item`)
 
-### Database Migration Details
+### 1.5 Translation Testing
 
-**Migration 0010_add_tags_and_relationships.sql should include:**
+#### Tasks:
+- [ ] **Test language switching**
+  - Switch between English and Turkish
+  - Verify all text updates correctly
+  - Check for any missing translations (fallback behavior)
+  - Ensure language preference persists
 
-```sql
--- Tags table
-CREATE TABLE IF NOT EXISTS tags (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL UNIQUE,
-    color TEXT,
-    created_at INTEGER NOT NULL,
-    usage_count INTEGER DEFAULT 0
-);
+- [ ] **Visual testing in both languages**
+  - Test all pages in English
+  - Test all pages in Turkish
+  - Check for text overflow issues
+  - Verify UI layout works with longer/shorter translations
+  - Check RTL support if needed (future)
 
--- Task-Tag junction table
-CREATE TABLE IF NOT EXISTS task_tags (
-    id TEXT PRIMARY KEY,
-    task_id TEXT NOT NULL,
-    tag_id TEXT NOT NULL,
-    created_at INTEGER NOT NULL,
-    FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
-    FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE,
-    UNIQUE(task_id, tag_id)
-);
+- [ ] **Task content translation testing**
+  - Test task title translation
+  - Test task description translation
+  - Verify translation caching works
+  - Test manual translation editing
+  - Check translation API fallback (Google → LibreTranslate)
 
--- Task relationships table
-CREATE TABLE IF NOT EXISTS task_relationships (
-    id TEXT PRIMARY KEY,
-    task_id_1 TEXT NOT NULL,
-    task_id_2 TEXT NOT NULL,
-    relationship_type TEXT DEFAULT 'related',
-    created_at INTEGER NOT NULL,
-    FOREIGN KEY (task_id_1) REFERENCES tasks(id) ON DELETE CASCADE,
-    FOREIGN KEY (task_id_2) REFERENCES tasks(id) ON DELETE CASCADE,
-    UNIQUE(task_id_1, task_id_2),
-    CHECK(task_id_1 != task_id_2)
-);
+### 1.6 Translation Files Organization
 
--- Indexes
-CREATE INDEX IF NOT EXISTS idx_task_tags_task_id ON task_tags(task_id);
-CREATE INDEX IF NOT EXISTS idx_task_tags_tag_id ON task_tags(tag_id);
-CREATE INDEX IF NOT EXISTS idx_tags_name ON tags(name);
-CREATE INDEX IF NOT EXISTS idx_tags_usage_count ON tags(usage_count);
-CREATE INDEX IF NOT EXISTS idx_task_relationships_task_1 ON task_relationships(task_id_1);
-CREATE INDEX IF NOT EXISTS idx_task_relationships_task_2 ON task_relationships(task_id_2);
-```
+#### Tasks:
+- [ ] **Review translation file structure**
+  - Consider splitting into multiple namespaces if files get too large
+  - Organize keys logically (e.g., `task.*`, `settings.*`, `nav.*`)
+  - Add comments/documentation for complex translations
 
-### Implementation Order
+- [ ] **Validate JSON files**
+  - Ensure valid JSON syntax
+  - Check for duplicate keys
+  - Verify all interpolation variables match (e.g., `{count}`, `{active}`)
 
-1. Database migration (0010_add_tags_and_relationships.sql)
-2. Backend Rust commands (commands.rs)
-3. Frontend TypeScript types and API adapter (tauriAdapter.ts)
-4. Frontend state management (useTags.ts, update useTasks.ts)
-5. Basic UI components (TagBadge, TagInput)
-6. Integration into TaskDetailsModal and TaskCard
-7. Filtering and grouping logic
-8. Tags page and advanced features
-9. Polish, animations, and accessibility
+---
 
-### Success Criteria
+## 2. Pre-Release Testing
 
-- ✅ Users can create and assign tags to tasks
-- ✅ Tags auto-suggest based on existing tags and usage frequency
-- ✅ Users can create relationships between tasks
-- ✅ Related tasks are visible in task details modal
-- ✅ Tasks can be filtered by tags (AND logic for multiple tags)
-- ✅ Tasks can be grouped by tags in list views
-- ✅ All operations are persisted to database
-- ✅ UI is intuitive, accessible, and performant
-- ✅ Tag management page shows all tags with statistics
-- ✅ Relationships prevent duplicates and self-references
+### 2.1 Unit Testing
 
-### Testing Considerations
+#### Current State:
+- Only 1 test file exists: `src/__tests__/AttachmentInput.test.tsx`
+- Testing framework: Vitest
+- Coverage: Minimal
 
-- Test tag creation with duplicate names (should return existing)
-- Test tag deletion (should cascade to task_tags)
-- Test relationship creation (prevent duplicates, prevent self-relationships)
-- Test tag filtering (AND logic for multiple tags)
-- Test auto-suggestions (case-insensitive, partial matches)
-- Test tag usage count increments/decrements correctly
-- Test related tasks query returns correct results
+#### Tasks:
+- [ ] **Set up test coverage reporting**
+  - Configure Vitest coverage
+  - Set coverage thresholds (target: 70%+)
+  - Add coverage script to package.json
 
-### Performance Optimizations
+- [ ] **Test critical business logic**
+  - [ ] Task operations (create, update, delete, complete)
+  - [ ] XP calculation logic (`src/utils/rankSystem.ts`)
+  - [ ] Filter logic (`src/utils/useFilteredTasks.ts`)
+  - [ ] Date helpers (`src/utils/dateHelpers.ts`)
+  - [ ] Command pattern (`src/utils/commandPattern.ts`)
 
-- Cache tag list in frontend state (don't refetch on every keystroke)
-- Use indexes on tag name and usage_count for fast searches
-- Limit tag suggestions to 10-20 most relevant
-- Lazy load related tasks (only fetch when panel is opened)
-- Debounce tag search input (300ms)
-- Batch tag operations when possible
+- [ ] **Test utility functions**
+  - [ ] Debounce hook (`src/hooks/useDebounce.ts`)
+  - [ ] Lazy load hook (`src/hooks/useLazyLoad.ts`)
+  - [ ] Undo/redo logic (`src/hooks/useUndoRedo.ts`)
 
-- Note: Always use PowerShell Commands.
+- [ ] **Test store operations**
+  - [ ] Tasks store (`src/store/useTasks.ts`)
+  - [ ] Tags store (`src/store/useTags.ts`)
+  - [ ] Projects store (`src/store/useProjects.ts`)
+  - [ ] Timer store (`src/store/useTimer.ts`)
+  - [ ] XP store (`src/store/useXp.ts`)
+
+- [ ] **Test API adapter**
+  - [ ] Tauri adapter functions (`src/api/tauriAdapter.ts`)
+  - [ ] Browser mode fallbacks
+  - [ ] Error handling
+
+### 2.2 Component Testing
+
+#### Tasks:
+- [ ] **Test key UI components**
+  - [ ] TaskCard component
+  - [ ] TaskDetailsModal component
+  - [ ] AddTaskModal component
+  - [ ] EditTaskModal component
+  - [ ] FilterBar component
+  - [ ] SearchBar component
+  - [ ] EmptyState component
+
+- [ ] **Test form components**
+  - [ ] Form validation
+  - [ ] Form submission
+  - [ ] Error handling
+  - [ ] Loading states
+
+- [ ] **Test modal components**
+  - [ ] Open/close behavior
+  - [ ] Form interactions
+  - [ ] Keyboard shortcuts (ESC to close)
+
+### 2.3 Integration Testing
+
+#### Tasks:
+- [ ] **Test store integration**
+  - [ ] Store sync with backend
+  - [ ] Store state updates
+  - [ ] Store error handling
+
+- [ ] **Test API integration**
+  - [ ] CRUD operations for tasks
+  - [ ] Tag operations
+  - [ ] Project operations
+  - [ ] Attachment operations
+  - [ ] Translation operations
+
+- [ ] **Test database operations**
+  - [ ] Database migrations
+  - [ ] Data persistence
+  - [ ] Data integrity
+
+### 2.4 End-to-End (E2E) Testing
+
+#### Tasks:
+- [ ] **Set up E2E testing framework** (if not already)
+  - Consider Playwright or Cypress
+  - Configure for Tauri app testing
+
+- [ ] **Test critical user flows**
+  - [ ] Create a new task
+  - [ ] Edit an existing task
+  - [ ] Complete a task
+  - [ ] Delete a task
+  - [ ] Add tags to a task
+  - [ ] Create task relationships
+  - [ ] Filter tasks by various criteria
+  - [ ] Use Pomodoro timer
+  - [ ] View statistics
+  - [ ] Change language settings
+  - [ ] Export/import data
+
+- [ ] **Test error scenarios**
+  - [ ] Network errors
+  - [ ] Database errors
+  - [ ] Invalid input handling
+  - [ ] File upload errors
+
+### 2.5 Manual Testing Checklist
+
+#### Core Functionality:
+- [ ] **Task Management**
+  - [ ] Create task with all fields
+  - [ ] Edit task
+  - [ ] Delete task
+  - [ ] Complete task
+  - [ ] Undo/redo operations
+  - [ ] Task templates
+
+- [ ] **Filtering & Search**
+  - [ ] Filter by priority
+  - [ ] Filter by project
+  - [ ] Filter by tags
+  - [ ] Filter by due date
+  - [ ] Search functionality
+  - [ ] Sort options
+
+- [ ] **Kanban Board**
+  - [ ] Drag and drop tasks
+  - [ ] Create columns
+  - [ ] Filter in Kanban view
+  - [ ] Task cards display correctly
+
+- [ ] **Pomodoro Timer**
+  - [ ] Start timer
+  - [ ] Pause/resume timer
+  - [ ] Complete Pomodoro session
+  - [ ] Task integration
+  - [ ] Sound controls
+  - [ ] Statistics tracking
+
+- [ ] **Statistics**
+  - [ ] View all charts
+  - [ ] Change date ranges
+  - [ ] Export statistics
+  - [ ] Verify calculations
+
+- [ ] **Tags & Relationships**
+  - [ ] Create tags
+  - [ ] Assign tags to tasks
+  - [ ] Filter by tags
+  - [ ] Create task relationships
+  - [ ] View related tasks
+
+- [ ] **Projects**
+  - [ ] Create project
+  - [ ] Assign tasks to projects
+  - [ ] Filter by project
+  - [ ] Project statistics
+
+- [ ] **Attachments**
+  - [ ] Upload files
+  - [ ] View attachments
+  - [ ] Delete attachments
+  - [ ] Image editing (if fixed)
+  - [ ] PDF viewing
+
+- [ ] **Settings**
+  - [ ] Change language
+  - [ ] Configure notifications
+  - [ ] Set Pomodoro timer settings
+  - [ ] Manage templates
+  - [ ] Backup/restore
+
+- [ ] **Gamification**
+  - [ ] XP earning
+  - [ ] Level progression
+  - [ ] Badge unlocking
+  - [ ] Streak tracking
+  - [ ] Progress panel
+
+#### Cross-Platform Testing:
+- [ ] **Windows**
+  - [ ] Install and run
+  - [ ] Test all features
+  - [ ] Check file system access
+  - [ ] Verify notifications
+
+- [ ] **macOS** (if applicable)
+  - [ ] Install and run
+  - [ ] Test all features
+  - [ ] Check file system access
+  - [ ] Verify notifications
+
+- [ ] **Linux** (if applicable)
+  - [ ] Install and run
+  - [ ] Test all features
+  - [ ] Check file system access
+  - [ ] Verify notifications
+
+#### Browser Mode Testing:
+- [ ] **Test browser fallbacks**
+  - [ ] Verify helpful error messages
+  - [ ] Test features that work in browser
+  - [ ] Check for console errors
+
+#### Performance Testing:
+- [ ] **Load testing**
+  - [ ] Test with 100+ tasks
+  - [ ] Test with many tags
+  - [ ] Test with many projects
+  - [ ] Verify performance is acceptable
+
+- [ ] **Memory testing**
+  - [ ] Check for memory leaks
+  - [ ] Monitor memory usage over time
+  - [ ] Test with large attachments
+
+#### Accessibility Testing:
+- [ ] **Keyboard navigation**
+  - [ ] Tab through all interactive elements
+  - [ ] Verify focus indicators
+  - [ ] Test keyboard shortcuts
+
+- [ ] **Screen reader compatibility**
+  - [ ] Test with screen reader (if possible)
+  - [ ] Verify ARIA labels
+  - [ ] Check semantic HTML
+
+- [ ] **Visual accessibility**
+  - [ ] Test with high contrast mode
+  - [ ] Verify color contrast ratios
+  - [ ] Check font sizes
+
+### 2.6 Bug Fixing
+
+#### Tasks:
+- [ ] **Fix critical bugs**
+  - [ ] Image editor bug (documented in `docs/Error.md`)
+  - [ ] Any bugs found during testing
+  - [ ] Console errors
+
+- [ ] **Fix minor bugs**
+  - [ ] UI glitches
+  - [ ] Typography issues
+  - [ ] Layout issues
+
+- [ ] **Document known issues**
+  - [ ] Update `docs/STATUS.md` with known limitations
+  - [ ] Document workarounds if needed
+
+### 2.7 Documentation Updates
+
+#### Tasks:
+- [ ] **Update user documentation**
+  - [ ] README.md
+  - [ ] Feature documentation
+  - [ ] Troubleshooting guide
+
+- [ ] **Update developer documentation**
+  - [ ] Code comments
+  - [ ] Architecture documentation
+  - [ ] Testing documentation
+
+- [ ] **Create release notes**
+  - [ ] List new features
+  - [ ] List bug fixes
+  - [ ] List known issues
+
+---
+
+## 3. Success Criteria
+
+### Translation:
+- ✅ All pages and components use translation keys (no hardcoded strings)
+- ✅ Both English and Turkish translations are complete and accurate
+- ✅ Language switching works correctly across all pages
+- ✅ Translation quality is reviewed and improved
+- ✅ Task content translation works correctly
+
+### Testing:
+- ✅ Unit tests cover critical business logic (70%+ coverage)
+- ✅ Component tests cover key UI components
+- ✅ Integration tests verify store/API integration
+- ✅ E2E tests cover critical user flows
+- ✅ Manual testing checklist is completed
+- ✅ No critical bugs remain
+- ✅ App works correctly on target platforms
+
+---
+
+## 4. Priority & Timeline
+
+### High Priority (Must Complete):
+1. Apply translations to all pages/components
+2. Fix critical bugs
+3. Core functionality manual testing
+4. Cross-platform testing
+
+### Medium Priority (Should Complete):
+1. Translation quality review
+2. Unit testing for critical logic
+3. Component testing
+4. Performance testing
+
+### Low Priority (Nice to Have):
+1. E2E testing setup
+2. Accessibility improvements
+3. Documentation updates
+
+---
+
+## 5. Notes
+
+- Use PowerShell commands for any terminal operations
+- Reference existing documentation in `docs/` folder
+- Follow existing code patterns and conventions
+- Test in both Tauri desktop mode and browser mode
+- Ensure backward compatibility with existing data

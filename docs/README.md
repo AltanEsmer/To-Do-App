@@ -4,6 +4,7 @@ This directory contains various documentation files for the To-Do App project.
 
 ## Contents
 
+- **[DEPLOYMENT.md](DEPLOYMENT.md)** - Complete deployment guide with automatic update support
 - **[STATUS.md](STATUS.md)** - Current project status, completed features, and technical implementation details
 - **[RELEASE.md](RELEASE.md)** - Release guide with build and distribution instructions
 - **[RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)** - Pre-release checklist for building production versions

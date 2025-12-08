@@ -7,11 +7,13 @@ import { Search, Filter } from 'lucide-react'
 import { Input } from '../components/ui/input'
 import { Button } from '../components/ui/button'
 import * as Popover from '@radix-ui/react-popover'
+import { useTranslation } from 'react-i18next'
 
 export function Kanban() {
   const tasks = useTasks((state) => state.tasks) // Selective subscription
   const projects = useProjects((state) => state.projects) // Selective subscription
   const tags = useTags((state) => state.tags) // Selective subscription
+  const { t } = useTranslation()
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedProjects, setSelectedProjects] = useState<string[]>([])
   const [selectedTags, setSelectedTags] = useState<string[]>([])
@@ -70,9 +72,9 @@ export function Kanban() {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <div className="mb-6 flex-shrink-0">
-        <h1 className="text-3xl font-bold">Kanban Board</h1>
+        <h1 className="text-3xl font-bold">{t('kanban.title')}</h1>
         <p className="mt-2 text-muted-foreground">
-          Visualize your workflow with drag-and-drop task management
+          {t('kanban.subtitle')}
         </p>
       </div>
 
@@ -82,7 +84,7 @@ export function Kanban() {
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             type="text"
-            placeholder="Search tasks..."
+            placeholder={t('kanban.searchPlaceholder')}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-9"
@@ -93,7 +95,7 @@ export function Kanban() {
           <Popover.Trigger asChild>
             <Button variant="outline" className="gap-2">
               <Filter className="h-4 w-4" />
-              Filters
+              {t('kanban.filters')}
               {hasActiveFilters && (
                 <span className="ml-1 rounded-full bg-primary-500 px-1.5 text-xs text-white">
                   {selectedProjects.length + selectedTags.length + selectedPriorities.length}
@@ -108,17 +110,17 @@ export function Kanban() {
             >
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <h3 className="font-semibold">Filters</h3>
+                  <h3 className="font-semibold">{t('kanban.filters')}</h3>
                   {hasActiveFilters && (
                     <Button variant="ghost" size="sm" onClick={clearFilters}>
-                      Clear all
+                      {t('kanban.clearAll')}
                     </Button>
                   )}
                 </div>
 
                 {/* Priority Filter */}
                 <div>
-                  <label className="mb-2 block text-sm font-medium">Priority</label>
+                  <label className="mb-2 block text-sm font-medium">{t('kanban.priority')}</label>
                   <div className="flex flex-wrap gap-2">
                     {['low', 'medium', 'high'].map((priority) => (
                       <Button
@@ -129,7 +131,7 @@ export function Kanban() {
                           toggleFilter(priority, selectedPriorities, setSelectedPriorities)
                         }
                       >
-                        {priority}
+                        {t(`kanban.${priority}`)}
                       </Button>
                     ))}
                   </div>
@@ -138,7 +140,7 @@ export function Kanban() {
                 {/* Project Filter */}
                 {projects.length > 0 && (
                   <div>
-                    <label className="mb-2 block text-sm font-medium">Projects</label>
+                    <label className="mb-2 block text-sm font-medium">{t('kanban.projects')}</label>
                     <div className="flex flex-wrap gap-2">
                       {projects.map((project) => (
                         <Button
@@ -159,7 +161,7 @@ export function Kanban() {
                 {/* Tag Filter */}
                 {tags.length > 0 && (
                   <div>
-                    <label className="mb-2 block text-sm font-medium">Tags</label>
+                    <label className="mb-2 block text-sm font-medium">{t('kanban.tags')}</label>
                     <div className="flex flex-wrap gap-2">
                       {tags.map((tag) => (
                         <Button

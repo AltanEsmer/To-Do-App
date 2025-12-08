@@ -3,6 +3,7 @@ import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { Task, TaskStatus } from '../../store/useTasks'
 import { KanbanTaskCard } from './KanbanTaskCard'
 import clsx from 'clsx'
+import { useTranslation } from 'react-i18next'
 
 interface KanbanColumnProps {
   column: {
@@ -17,6 +18,7 @@ export function KanbanColumn({ column, tasks }: KanbanColumnProps) {
   const { setNodeRef, isOver } = useDroppable({
     id: column.id,
   })
+  const { t } = useTranslation()
 
   return (
     <div className="flex h-full flex-col overflow-hidden rounded-lg border border-border bg-card/50">
@@ -41,8 +43,7 @@ export function KanbanColumn({ column, tasks }: KanbanColumnProps) {
           {tasks.length === 0 ? (
             <div className="flex h-40 items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/20 bg-muted/30 transition-colors">
               <div className="text-center">
-                <p className="text-sm font-medium text-muted-foreground">Drop tasks here</p>
-                <p className="mt-1 text-xs text-muted-foreground/60">or drag from other columns</p>
+                <p className="text-sm font-medium text-muted-foreground">{t('kanban.dropTaskHere')}</p>
               </div>
             </div>
           ) : (

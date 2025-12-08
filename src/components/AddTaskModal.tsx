@@ -10,6 +10,7 @@ import { getNextOccurrenceDate, formatRecurrencePattern, formatTaskDate } from '
 import { CreateTaskCommand } from '../commands/taskCommands'
 import { commandHistory } from '../utils/commandPattern'
 import { logger } from '../services/logger'
+import { useTranslation } from 'react-i18next'
 
 interface AddTaskModalProps {
   open: boolean
@@ -22,6 +23,7 @@ interface AddTaskModalProps {
  */
 export function AddTaskModal({ open, onOpenChange }: AddTaskModalProps) {
   const tasksStore = useTasks()
+  const { t } = useTranslation()
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [dueDate, setDueDate] = useState('')
@@ -155,7 +157,7 @@ export function AddTaskModal({ open, onOpenChange }: AddTaskModalProps) {
                   <div className="p-6 flex-shrink-0">
                     <div className="mb-4 flex items-center justify-between">
                       <Dialog.Title className="text-lg font-semibold text-foreground">
-                        Add New Task
+                        {t('addTask.title')}
                       </Dialog.Title>
                       <button
                         type="button"
@@ -163,12 +165,12 @@ export function AddTaskModal({ open, onOpenChange }: AddTaskModalProps) {
                         className="focus-ring flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted"
                       >
                         <FileText className="h-4 w-4" />
-                        Load from Template
+                        {t('addTask.loadTemplate')}
                       </button>
                     </div>
                     {selectedTemplateId && (
                       <div className="mb-2 rounded-lg bg-primary-100 px-3 py-2 text-xs text-primary-700 dark:bg-primary-900/30 dark:text-primary-300">
-                        Template loaded
+                        {t('addTask.templateLoaded')}
                       </div>
                     )}
                   </div>
@@ -177,7 +179,7 @@ export function AddTaskModal({ open, onOpenChange }: AddTaskModalProps) {
                       <div className="space-y-4">
                         <div>
                           <label htmlFor="task-title" className="mb-1 block text-sm font-medium text-foreground">
-                            Title <span className="text-red-500">*</span>
+                            {t('addTask.titleLabel')} <span className="text-red-500">*</span>
                           </label>
                           <input
                             ref={titleInputRef}
@@ -186,7 +188,7 @@ export function AddTaskModal({ open, onOpenChange }: AddTaskModalProps) {
                             value={title}
                             onChange={(e) => setTitle(e.target.value)}
                             className="focus-ring w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground"
-                            placeholder="Enter task title"
+                            placeholder={t('addTask.titlePlaceholder')}
                             required
                             aria-required="true"
                           />
@@ -194,7 +196,7 @@ export function AddTaskModal({ open, onOpenChange }: AddTaskModalProps) {
 
                         <div>
                           <label htmlFor="task-description" className="mb-1 block text-sm font-medium text-foreground">
-                            Description
+                            {t('addTask.descriptionLabel')}
                           </label>
                           <textarea
                             id="task-description"
@@ -202,14 +204,14 @@ export function AddTaskModal({ open, onOpenChange }: AddTaskModalProps) {
                             onChange={(e) => setDescription(e.target.value)}
                             rows={3}
                             className="focus-ring w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground"
-                            placeholder="Add details (optional)"
+                            placeholder={t('addTask.descriptionPlaceholder')}
                           />
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
                           <div>
                             <label htmlFor="task-due-date" className="mb-1 block text-sm font-medium text-foreground">
-                              Due Date <span className="text-red-500">*</span>
+                              {t('addTask.dueDateLabel')} <span className="text-red-500">*</span>
                             </label>
                             <input
                               id="task-due-date"
@@ -224,7 +226,7 @@ export function AddTaskModal({ open, onOpenChange }: AddTaskModalProps) {
 
                           <div>
                             <label htmlFor="task-priority" className="mb-1 block text-sm font-medium text-foreground">
-                              Priority
+                              {t('addTask.priorityLabel')}
                             </label>
                             <select
                               id="task-priority"
@@ -232,9 +234,9 @@ export function AddTaskModal({ open, onOpenChange }: AddTaskModalProps) {
                               onChange={(e) => setPriority(e.target.value as TaskPriority)}
                               className="focus-ring w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
                             >
-                              <option value="low">Low</option>
-                              <option value="medium">Medium</option>
-                              <option value="high">High</option>
+                              <option value="low">{t('task.priority.low')}</option>
+                              <option value="medium">{t('task.priority.medium')}</option>
+                              <option value="high">{t('task.priority.high')}</option>
                             </select>
                           </div>
                         </div>
@@ -242,7 +244,7 @@ export function AddTaskModal({ open, onOpenChange }: AddTaskModalProps) {
                         <div className="space-y-3">
                           <label className="flex items-center gap-2 text-sm font-medium text-foreground">
                             <Repeat className="h-4 w-4 text-primary-500" />
-                            Recurrence
+                            {t('addTask.recurrenceLabel')}
                           </label>
                           <div className="grid grid-cols-2 gap-4">
                             <select
@@ -251,10 +253,10 @@ export function AddTaskModal({ open, onOpenChange }: AddTaskModalProps) {
                               onChange={(e) => setRecurrenceType(e.target.value as RecurrenceType)}
                               className="focus-ring w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
                             >
-                              <option value="none">No recurrence</option>
-                              <option value="daily">Daily</option>
-                              <option value="weekly">Weekly</option>
-                              <option value="monthly">Monthly</option>
+                              <option value="none">{t('addTask.recurrence.none')}</option>
+                              <option value="daily">{t('addTask.recurrence.daily')}</option>
+                              <option value="weekly">{t('addTask.recurrence.weekly')}</option>
+                              <option value="monthly">{t('addTask.recurrence.monthly')}</option>
                             </select>
                             {recurrenceType !== 'none' && (
                               <input
@@ -262,9 +264,9 @@ export function AddTaskModal({ open, onOpenChange }: AddTaskModalProps) {
                                 min="1"
                                 value={recurrenceInterval}
                                 onChange={(e) => setRecurrenceInterval(Math.max(1, parseInt(e.target.value) || 1))}
-                                placeholder="Interval"
+                                placeholder={t('addTask.recurrenceInterval')}
                                 className="focus-ring w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
-                                aria-label="Recurrence interval"
+                                aria-label={t('addTask.recurrenceInterval')}
                               />
                             )}
                           </div>
@@ -273,14 +275,14 @@ export function AddTaskModal({ open, onOpenChange }: AddTaskModalProps) {
                               <p className="text-xs text-primary-600 dark:text-primary-400">
                                 {formatRecurrencePattern(recurrenceType, recurrenceInterval)}
                                 {getNextOccurrenceDate(new Date(dueDate), recurrenceType, recurrenceInterval) && (
-                                  <> • Next: {formatTaskDate(getNextOccurrenceDate(new Date(dueDate), recurrenceType, recurrenceInterval)!)}</>
+                                  <> • {t('addTask.recurrenceNext')}: {formatTaskDate(getNextOccurrenceDate(new Date(dueDate), recurrenceType, recurrenceInterval)!)}</>
                                 )}
                               </p>
                             </div>
                           )}
                           {recurrenceType !== 'none' && !dueDate && (
                             <p className="text-xs text-muted-foreground">
-                              Set a due date to preview recurrence pattern
+                              {t('addTask.recurrencePreview')}
                             </p>
                           )}
                         </div>
@@ -288,7 +290,7 @@ export function AddTaskModal({ open, onOpenChange }: AddTaskModalProps) {
                         {dueDate && (
                           <div className="space-y-3 rounded-lg border border-border bg-muted/30 p-4">
                             <div className="flex items-center justify-between">
-                              <label className="text-sm font-medium text-foreground">Notification Reminder</label>
+                              <label className="text-sm font-medium text-foreground">{t('addTask.reminderLabel')}</label>
                               <button
                                 type="button"
                                 onClick={() => {
@@ -297,12 +299,12 @@ export function AddTaskModal({ open, onOpenChange }: AddTaskModalProps) {
                                 }}
                                 className="text-xs text-muted-foreground hover:text-foreground"
                               >
-                                Clear
+                                {t('addTask.reminderClear')}
                               </button>
                             </div>
                             <div>
                               <label htmlFor="reminder-time" className="mb-1 block text-xs text-muted-foreground">
-                                Remind me
+                                {t('addTask.remindMe')}
                               </label>
                               <select
                                 id="reminder-time"
@@ -310,12 +312,12 @@ export function AddTaskModal({ open, onOpenChange }: AddTaskModalProps) {
                                 onChange={(e) => setReminderMinutesBefore(e.target.value ? parseInt(e.target.value) : null)}
                                 className="focus-ring w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
                               >
-                                <option value="">No reminder</option>
-                                <option value="15">15 minutes before</option>
-                                <option value="30">30 minutes before</option>
-                                <option value="60">1 hour before</option>
-                                <option value="120">2 hours before</option>
-                                <option value="1440">1 day before</option>
+                                <option value="">{t('addTask.noReminder')}</option>
+                                <option value="15">{t('addTask.reminder15')}</option>
+                                <option value="30">{t('addTask.reminder30')}</option>
+                                <option value="60">{t('addTask.reminder60')}</option>
+                                <option value="120">{t('addTask.reminder120')}</option>
+                                <option value="1440">{t('addTask.reminder1440')}</option>
                               </select>
                             </div>
                             {reminderMinutesBefore && (
@@ -328,7 +330,7 @@ export function AddTaskModal({ open, onOpenChange }: AddTaskModalProps) {
                                   className="h-4 w-4 rounded border-border text-primary-500 focus:ring-primary-500"
                                 />
                                 <label htmlFor="notification-repeat" className="text-xs text-muted-foreground">
-                                  Repeat reminder daily until completed
+                                  {t('addTask.reminderRepeat')}
                                 </label>
                               </div>
                             )}
@@ -342,13 +344,13 @@ export function AddTaskModal({ open, onOpenChange }: AddTaskModalProps) {
                           onClick={handleCancel}
                           className="focus-ring rounded-lg px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted"
                         >
-                          Cancel
+                          {t('cancel')}
                         </button>
                         <button
                           type="submit"
                           className="focus-ring rounded-lg bg-primary-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-600"
                         >
-                          Add Task
+                          {t('addTask.submit')}
                         </button>
                       </div>
                     </form>

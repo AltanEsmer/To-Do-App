@@ -19,6 +19,7 @@ import { useNavigate } from 'react-router-dom'
 import { useToast } from '../components/ui/use-toast'
 import { logger } from '../services/logger'
 import { errorHandler } from '../services/errorHandler'
+import { useTranslation } from 'react-i18next'
 
 const PRESET_COLORS = [
   '#ef4444', '#f97316', '#f59e0b', '#eab308', '#84cc16',
@@ -36,6 +37,7 @@ export function Tags() {
   const { setSelectedTags } = useTaskFilters()
   const navigate = useNavigate()
   const { toast } = useToast()
+  const { t } = useTranslation()
   
   const [dialogOpen, setDialogOpen] = useState(false)
   const [tagName, setTagName] = useState('')
@@ -68,8 +70,8 @@ export function Tags() {
       await deleteTag(tagId)
       logger.info('Tag deleted successfully', { tagId })
       toast({
-        title: 'Tag deleted',
-        description: 'The tag has been removed successfully.',
+        title: t('tags.tagDeleted'),
+        description: t('tags.tagDeletedDesc'),
         variant: 'default',
       })
     } catch (error) {
@@ -87,8 +89,8 @@ export function Tags() {
     } else {
       // Tag has no tasks, show a toast message and clear any existing tag filters
       toast({
-        title: 'No tasks found',
-        description: `This tag has no tasks assigned yet.`,
+        title: t('tags.noTasksFound'),
+        description: t('tags.noTasksFoundDesc'),
         variant: 'default',
       })
       setSelectedTags([])
@@ -109,10 +111,10 @@ export function Tags() {
           <div>
             <h1 className="text-3xl font-bold text-foreground flex items-center gap-2">
               <Hash className="h-8 w-8 text-primary-500" />
-              Tags
+              {t('tags.title')}
             </h1>
             <p className="text-muted-foreground mt-1">
-              Organize and categorize your tasks with tags
+              {t('tags.subtitle')}
             </p>
           </div>
 
@@ -120,22 +122,22 @@ export function Tags() {
             <DialogTrigger asChild>
               <Button>
                 <Plus className="h-4 w-4 mr-2" />
-                New Tag
+                {t('tags.newTag')}
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Create New Tag</DialogTitle>
+                <DialogTitle>{t('tags.createNew')}</DialogTitle>
                 <DialogDescription>
-                  Add a new tag to organize your tasks
+                  {t('tags.createNewDesc')}
                 </DialogDescription>
               </DialogHeader>
 
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Tag Name</label>
+                  <label className="text-sm font-medium">{t('tags.tagName')}</label>
                   <Input
-                    placeholder="Enter tag name..."
+                    placeholder={t('tags.tagNamePlaceholder')}
                     value={tagName}
                     onChange={(e) => setTagName(e.target.value)}
                     onKeyDown={(e) => {
@@ -149,7 +151,7 @@ export function Tags() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Color</label>
+                  <label className="text-sm font-medium">{t('tags.color')}</label>
                   <div className="grid grid-cols-10 gap-2">
                     {PRESET_COLORS.map((color) => (
                       <button
@@ -167,7 +169,7 @@ export function Tags() {
 
                 {tagName.trim() && (
                   <div className="p-4 bg-muted rounded-lg">
-                    <p className="text-sm text-muted-foreground mb-2">Preview:</p>
+                    <p className="text-sm text-muted-foreground mb-2">{t('tags.preview')}</p>
                     <TagBadge
                       tag={{
                         id: 'preview',
@@ -184,10 +186,10 @@ export function Tags() {
 
               <DialogFooter>
                 <Button variant="outline" onClick={() => setDialogOpen(false)}>
-                  Cancel
+                  {t('cancel')}
                 </Button>
                 <Button onClick={handleCreateTag} disabled={!tagName.trim()}>
-                  Create Tag
+                  {t('tags.createTag')}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -195,7 +197,7 @@ export function Tags() {
         </div>
 
         <Input
-          placeholder="Search tags..."
+          placeholder={t('tags.searchPlaceholder')}
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           className="max-w-md"
@@ -203,22 +205,22 @@ export function Tags() {
       </div>
 
       {loading ? (
-        <div className="text-center py-12 text-muted-foreground">Loading tags...</div>
+        <div className="text-center py-12 text-muted-foreground">{t('tags.loading')}</div>
       ) : filteredTags.length === 0 ? (
         <div className="text-center py-12">
           <TagIcon className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
           <h3 className="text-lg font-medium text-foreground mb-2">
-            {searchQuery ? 'No tags found' : 'No tags yet'}
+            {searchQuery ? t('tags.noTagsFound') : t('tags.noTagsYet')}
           </h3>
           <p className="text-muted-foreground mb-4">
             {searchQuery
-              ? 'Try a different search term'
-              : 'Create your first tag to start organizing tasks'}
+              ? t('tags.tryDifferentSearch')
+              : t('tags.createFirstTag')}
           </p>
           {!searchQuery && (
             <Button onClick={() => setDialogOpen(true)}>
               <Plus className="h-4 w-4 mr-2" />
-              Create Tag
+              {t('tags.createTagButton')}
             </Button>
           )}
         </div>
@@ -226,7 +228,7 @@ export function Tags() {
         <>
           {/* Tag Cloud */}
           <div className="mb-8">
-            <h2 className="text-xl font-semibold text-foreground mb-4">Tag Cloud</h2>
+            <h2 className="text-xl font-semibold text-foreground mb-4">{t('tags.tagCloud')}</h2>
             <div className="flex flex-wrap gap-3">
               {filteredTags
                 .sort((a, b) => b.usage_count - a.usage_count)
@@ -253,7 +255,7 @@ export function Tags() {
 
           {/* Tag List */}
           <div>
-            <h2 className="text-xl font-semibold text-foreground mb-4">All Tags</h2>
+            <h2 className="text-xl font-semibold text-foreground mb-4">{t('tags.allTags')}</h2>
             <div className="grid gap-3">
               {filteredTags.map((tag) => (
                 <motion.div
@@ -266,7 +268,10 @@ export function Tags() {
                     <TagBadge tag={tag} clickable={false} />
                     <div className="flex-1">
                       <p className="text-sm text-muted-foreground">
-                        Used in {tag.usage_count} {tag.usage_count === 1 ? 'task' : 'tasks'}
+                        {t('tags.usedIn', { 
+                          count: tag.usage_count, 
+                          task: tag.usage_count === 1 ? t('tags.task') : t('tags.tasks')
+                        })}
                       </p>
                     </div>
                   </div>
@@ -280,7 +285,7 @@ export function Tags() {
                         handleViewTasksWithTag(tag.id)
                       }}
                     >
-                      View Tasks
+                      {t('tags.viewTasks')}
                     </Button>
                     <Button
                       variant="ghost"
@@ -292,8 +297,8 @@ export function Tags() {
                       disabled={tag.usage_count > 0}
                       title={
                         tag.usage_count > 0
-                          ? 'Remove tag from all tasks first'
-                          : 'Delete tag'
+                          ? t('tags.deleteTooltipDisabled')
+                          : t('tags.deleteTooltip')
                       }
                     >
                       <Trash2 className="h-4 w-4" />
