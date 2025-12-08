@@ -30,11 +30,7 @@ interface CompletionStats {
   count: number
 }
 
-interface PriorityDistribution {
-  priority: string
-  count: number
-  [key: string]: string | number
-}
+type PriorityDistribution = tauriAdapter.PriorityDistribution
 
 interface ProjectStats {
   project_id: string | null
@@ -311,7 +307,11 @@ export function Statistics() {
                   cx="50%"
                   cy="50%"
                   labelLine={false}
-                  label={({ priority, percent }: { priority: string; percent: number }) => `${priority}: ${(percent * 100).toFixed(0)}%`}
+                  label={(props: any) => {
+                    const priority = props.priority || ''
+                    const percent = props.percent || 0
+                    return `${priority}: ${(percent * 100).toFixed(0)}%`
+                  }}
                   outerRadius={80}
                   fill="#8884d8"
                   dataKey="count"

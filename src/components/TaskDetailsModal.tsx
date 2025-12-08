@@ -17,7 +17,6 @@ import { Badge } from './ui/badge'
 import { TagInput } from './TagInput'
 import { RelatedTasksPanel } from './RelatedTasksPanel'
 import { TagBadge } from './TagBadge'
-import { useTags } from '../store/useTags'
 import { getNextOccurrenceDate, formatRecurrencePattern, formatTaskDate } from '../utils/dateHelpers'
 
 interface TaskDetailsModalProps {
