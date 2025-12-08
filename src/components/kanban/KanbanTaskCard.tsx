@@ -40,7 +40,7 @@ export function KanbanTaskCard({ task, isDragging = false }: KanbanTaskCardProps
 
   const isOverdueTask = task.dueDate && !task.completed && isOverdue(task.dueDate)
 
-  const handleContentClick = (e: React.MouseEvent) => {
+  const handleContentClick = (_e: React.MouseEvent) => {
     if (!detailsOpen) {
       setDetailsOpen(true)
     }

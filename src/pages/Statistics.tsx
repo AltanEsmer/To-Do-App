@@ -33,6 +33,7 @@ interface CompletionStats {
 interface PriorityDistribution {
   priority: string
   count: number
+  [key: string]: string | number
 }
 
 interface ProjectStats {
@@ -51,12 +52,6 @@ interface ProductivityTrend {
 interface MostProductiveDay {
   day_of_week: string
   count: number
-}
-
-const COLORS = {
-  high: '#ef4444',
-  medium: '#f59e0b',
-  low: '#10b981',
 }
 
 const PRIORITY_COLORS = ['#ef4444', '#f59e0b', '#10b981']
@@ -316,12 +311,12 @@ export function Statistics() {
                   cx="50%"
                   cy="50%"
                   labelLine={false}
-                  label={({ priority, percent }) => `${priority}: ${(percent * 100).toFixed(0)}%`}
+                  label={({ priority, percent }: { priority: string; percent: number }) => `${priority}: ${(percent * 100).toFixed(0)}%`}
                   outerRadius={80}
                   fill="#8884d8"
                   dataKey="count"
                 >
-                  {priorityDistribution.map((entry, index) => (
+                  {priorityDistribution.map((_entry, index) => (
                     <Cell key={`cell-${index}`} fill={PRIORITY_COLORS[index % PRIORITY_COLORS.length]} />
                   ))}
                 </Pie>

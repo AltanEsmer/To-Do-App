@@ -25,8 +25,6 @@ interface SortDropdownProps {
 export const SortDropdown = forwardRef<HTMLSelectElement, SortDropdownProps>(({ className = '' }, ref) => {
   const { sortBy, setSortBy } = useTaskFilters()
 
-  const currentLabel = sortOptions.find((opt) => opt.value === sortBy)?.label || 'Date Created'
-
   return (
     <div className={`relative ${className}`}>
       <label htmlFor="sort-select" className="sr-only">

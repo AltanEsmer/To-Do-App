@@ -47,7 +47,15 @@ describe('AttachmentInput', () => {
       created_at: Date.now() / 1000,
     })
 
-    const result = await safeInvoke('add_attachment', { taskId: 'task-1', filePath: '/path/to/test.png' })
+    const result = await safeInvoke('add_attachment', { taskId: 'task-1', filePath: '/path/to/test.png' }) as {
+      id: string
+      task_id: string
+      filename: string
+      path: string
+      mime: string
+      size: number
+      created_at: number
+    }
     
     expect(result).toBeDefined()
     expect(result.filename).toBe('test.png')

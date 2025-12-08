@@ -91,7 +91,7 @@ export function AttachmentCard({ attachment, imageUrl, onDelete, onImageLoad, on
             const fileData = await readBinaryFile(fullPath)
             
             if (fileData && fileData.length > 0) {
-              const blob = new Blob([fileData], { type: 'application/pdf' })
+              const blob = new Blob([fileData as BlobPart], { type: 'application/pdf' })
               const url = URL.createObjectURL(blob)
               setPdfUrl(url)
             }
@@ -140,7 +140,7 @@ export function AttachmentCard({ attachment, imageUrl, onDelete, onImageLoad, on
             
             if (fileData && fileData.length > 0) {
               const mimeType = attachment.mime || (isVideo() ? 'video/mp4' : 'audio/mpeg')
-              const blob = new Blob([fileData], { type: mimeType })
+              const blob = new Blob([fileData as BlobPart], { type: mimeType })
               const url = URL.createObjectURL(blob)
               setMediaUrl(url)
             }
@@ -465,7 +465,7 @@ export function AttachmentCard({ attachment, imageUrl, onDelete, onImageLoad, on
                       src={mediaUrl} 
                       controls 
                       className="max-w-full max-h-[70vh] rounded"
-                      onError={(e) => {
+                      onError={(_e) => {
                         console.error('Video failed to load:', mediaUrl, attachment)
                         toast({
                           title: 'Error',
@@ -482,7 +482,7 @@ export function AttachmentCard({ attachment, imageUrl, onDelete, onImageLoad, on
                         src={mediaUrl} 
                         controls 
                         className="w-full"
-                        onError={(e) => {
+                        onError={(_e) => {
                           console.error('Audio failed to load:', mediaUrl, attachment)
                           toast({
                             title: 'Error',

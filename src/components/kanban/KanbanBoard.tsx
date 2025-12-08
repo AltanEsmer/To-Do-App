@@ -56,7 +56,7 @@ export function KanbanBoard({ tasks }: KanbanBoardProps) {
     setActiveTask(task || null)
   }
 
-  const handleDragOver = (event: DragOverEvent) => {
+  const handleDragOver = (_event: DragOverEvent) => {
     // Optional: You can implement live preview updates here if needed
     // For now, we'll just handle the final drop in handleDragEnd
   }

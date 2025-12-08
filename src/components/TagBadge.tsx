@@ -1,4 +1,3 @@
-import React from 'react'
 import { Badge } from './ui/badge'
 import { X } from 'lucide-react'
 import { Tag } from '../store/useTags'

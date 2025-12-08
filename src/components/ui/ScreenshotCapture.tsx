@@ -1,6 +1,5 @@
 import { useState } from 'react'
-import { Camera, Monitor, Square } from 'lucide-react'
-import * as Dialog from '@radix-ui/react-dialog'
+import { Camera } from 'lucide-react'
 import { useToast } from './use-toast'
 import { isTauri } from '../../utils/tauri'
 

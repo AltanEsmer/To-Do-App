@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { Input } from './ui/input'
 import { Button } from './ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
@@ -106,7 +106,10 @@ export function TagInput({ taskId, selectedTags, onTagsChange }: TagInputProps) 
                   if (e.key === 'Enter' && searchQuery.trim()) {
                     e.preventDefault()
                     if (filteredSuggestions.length > 0) {
-                      handleAddTag(filteredSuggestions[0])
+                      const firstSuggestion = filteredSuggestions[0]
+                      if (firstSuggestion) {
+                        handleAddTag(firstSuggestion)
+                      }
                     } else {
                       handleCreateAndAddTag()
                     }

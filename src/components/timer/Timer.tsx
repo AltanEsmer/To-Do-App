@@ -7,7 +7,7 @@ import { Play, Pause, RotateCcw } from 'lucide-react'
  */
 export function Timer() {
   const { mode, status, timeLeft, startTimer, pauseTimer, resetTimer, _tick, syncTimer } = useTimer()
-  const intervalRef = useRef<NodeJS.Timeout | null>(null)
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // Format time as MM:SS
   const formatTime = (seconds: number): string => {

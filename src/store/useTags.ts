@@ -19,7 +19,7 @@ interface TagsState {
   getSuggestedTags: (search: string) => Promise<Tag[]>
 }
 
-export const useTags = create<TagsState>()((set, get) => ({
+export const useTags = create<TagsState>()((set) => ({
   tags: [],
   loading: false,
   error: null,

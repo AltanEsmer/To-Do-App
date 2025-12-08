@@ -28,7 +28,6 @@ interface TaskDetailsModalProps {
 
 export function TaskDetailsModal({ task, open, onOpenChange }: TaskDetailsModalProps) {
   const { updateTask, getTaskById, syncTasks } = useTasks()
-  const { syncTags } = useTags()
   const { toast } = useToast()
   const { t } = useTranslation()
   const [attachments, setAttachments] = useState<tauriAdapter.Attachment[]>([])
@@ -88,7 +87,7 @@ export function TaskDetailsModal({ task, open, onOpenChange }: TaskDetailsModalP
          'image/jpeg')
       
       // Create a blob URL from the binary data
-      const blob = new Blob([fileData], { type: mimeType })
+      const blob = new Blob([fileData as BlobPart], { type: mimeType })
       const url = URL.createObjectURL(blob)
       console.log('Created blob URL for image:', attachment.filename)
       return url

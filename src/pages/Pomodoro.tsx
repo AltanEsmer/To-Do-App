@@ -14,7 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../components/ui/dialog'
-import { Target, CheckCircle2, BarChart3, ListTodo, Plus } from 'lucide-react'
+import { Target, CheckCircle2, BarChart3, ListTodo } from 'lucide-react'
 import { Card } from '../components/ui/card'
 
 /**

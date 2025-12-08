@@ -20,7 +20,6 @@ export function CircularTimer({ size = 320, strokeWidth = 12 }: CircularTimerPro
 
   // Calculate progress
   const progress = duration > 0 ? (timeLeft / duration) : 0
-  const percentage = progress * 100
   
   // SVG geometry
   const center = size / 2
@@ -76,7 +75,7 @@ export function CircularTimer({ size = 320, strokeWidth = 12 }: CircularTimerPro
   // Sync timer on mount and interval
   useEffect(() => {
     syncTimer()
-    let interval: NodeJS.Timeout
+    let interval: ReturnType<typeof setInterval>
     
     if (status === 'running') {
       interval = setInterval(() => {

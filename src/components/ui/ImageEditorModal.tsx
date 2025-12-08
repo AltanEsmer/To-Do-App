@@ -1,6 +1,6 @@
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
-import { Crop, RotateCw, Maximize2, Palette, Save, X } from 'lucide-react'
+import { Crop, RotateCw, Palette, Save, X } from 'lucide-react'
 import Cropper, { Area } from 'react-easy-crop'
 import { useToast } from './use-toast'
 
@@ -37,7 +37,7 @@ export function ImageEditorModal({
     filter: `brightness(${brightness}%) contrast(${contrast}%) saturate(${saturation}%)`,
   }
 
-  const onCropComplete = useCallback((croppedArea: Area, croppedAreaPixels: Area) => {
+  const onCropComplete = useCallback((_croppedArea: Area, croppedAreaPixels: Area) => {
     setCroppedAreaPixels(croppedAreaPixels)
   }, [])
 
@@ -99,9 +99,13 @@ export function ImageEditorModal({
     const saturationAdj = (saturation - 100) / 100
 
     for (let i = 0; i < data32.length; i++) {
-      let r = imageData.data[i * 4]
-      let g = imageData.data[i * 4 + 1]
-      let b = imageData.data[i * 4 + 2]
+      const rIndex = i * 4
+      const gIndex = i * 4 + 1
+      const bIndex = i * 4 + 2
+      
+      let r = imageData.data[rIndex] ?? 0
+      let g = imageData.data[gIndex] ?? 0
+      let b = imageData.data[bIndex] ?? 0
 
       // Brightness
       r += brightnessAdj
@@ -119,9 +123,9 @@ export function ImageEditorModal({
       g = gray + (g - gray) * (1 + saturationAdj)
       b = gray + (b - gray) * (1 + saturationAdj)
 
-      imageData.data[i * 4] = Math.max(0, Math.min(255, r))
-      imageData.data[i * 4 + 1] = Math.max(0, Math.min(255, g))
-      imageData.data[i * 4 + 2] = Math.max(0, Math.min(255, b))
+      imageData.data[rIndex] = Math.max(0, Math.min(255, r))
+      imageData.data[gIndex] = Math.max(0, Math.min(255, g))
+      imageData.data[bIndex] = Math.max(0, Math.min(255, b))
     }
 
     ctx.putImageData(imageData, 0, 0)
