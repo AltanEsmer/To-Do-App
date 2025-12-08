@@ -1449,9 +1449,14 @@ pub fn get_autostart_enabled(app_handle: tauri::AppHandle) -> Result<bool, Strin
     
     let app_name = app_handle.package_info().name.clone();
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-    let run_key = hkcu.open_subkey("Software\\Microsoft\\Windows\\CurrentVersion\\Run")
-        .map_err(|e| format!("Failed to open registry key: {}", e))?;
     
+    // Try to open the Run key, return false if it doesn't exist
+    let run_key = match hkcu.open_subkey("Software\\Microsoft\\Windows\\CurrentVersion\\Run") {
+        Ok(key) => key,
+        Err(_) => return Ok(false),
+    };
+    
+    // Check if the app name exists in the registry
     match run_key.get_value::<String, _>(&app_name) {
         Ok(_) => Ok(true),
         Err(_) => Ok(false),
@@ -1479,11 +1484,18 @@ pub fn set_autostart_enabled(
             .map_err(|e| format!("Failed to get executable path: {}", e))?;
         let exe_path_str = exe_path.to_string_lossy().to_string();
         
-        run_key.set_value(&app_name, &exe_path_str)
+        // Wrap path in quotes if it contains spaces (Windows requirement)
+        let registry_value = if exe_path_str.contains(' ') {
+            format!("\"{}\"", exe_path_str)
+        } else {
+            exe_path_str
+        };
+        
+        run_key.set_value(&app_name, &registry_value)
             .map_err(|e| format!("Failed to set registry value: {}", e))?;
     } else {
-        run_key.delete_value(&app_name)
-            .map_err(|e| format!("Failed to delete registry value: {}", e))?;
+        // Try to delete the value, but don't error if it doesn't exist
+        let _ = run_key.delete_value(&app_name);
     }
     
     Ok(())

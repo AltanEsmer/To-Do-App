@@ -9,6 +9,18 @@ fn now() -> i64 {
         .as_secs() as i64
 }
 
+/// Check if notifications are enabled in settings
+fn are_notifications_enabled(db: &crate::db::DbConnection) -> bool {
+    db.conn.query_row(
+        "SELECT value FROM settings WHERE key = 'notifications_enabled'",
+        [],
+        |row| {
+            let value: String = row.get(0)?;
+            Ok(value == "true")
+        },
+    ).unwrap_or(true) // Default to enabled if setting doesn't exist
+}
+
 pub fn show_notification(title: &str, body: &str) -> Result<(), Box<dyn std::error::Error>> {
     Notification::new("com.todoapp.dev")
         .title(title)
@@ -89,6 +101,11 @@ pub fn snooze_notification(
 pub fn check_due_notifications(
     db: &crate::db::DbConnection,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    // Check if notifications are enabled before proceeding
+    if !are_notifications_enabled(db) {
+        return Ok(());
+    }
+    
     let now = now();
     
     // Get notifications that are due and not snoozed
