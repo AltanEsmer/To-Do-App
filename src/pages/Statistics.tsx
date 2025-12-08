@@ -31,7 +31,7 @@ interface CompletionStats {
 }
 
 type PriorityDistribution = tauriAdapter.PriorityDistribution & {
-  [key: string]: string | number
+  [key: string]: any
 }
 
 interface ProjectStats {
