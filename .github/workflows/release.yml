@@ -55,4 +55,4 @@ jobs:
           releaseDraft: true
           prerelease: false
           includeUpdaterJson: true
-          buildScript: 'tauri:build'
+          tauriScript: 'npm run tauri:build'
