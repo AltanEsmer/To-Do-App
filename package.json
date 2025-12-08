@@ -7,6 +7,7 @@
     "prebuild": "tsc",
     "build": "vite build",
     "preview": "vite preview",
+    "tauri": "npx tauri",
     "tauri:dev": "npx tauri dev",
     "tauri:build": "npx tauri build",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
