@@ -687,6 +687,13 @@ export async function getTasksByTags(tagIds: string[]): Promise<Task[]> {
   return safeInvoke<Task[]>('get_tasks_by_tags', { tag_ids: tagIds }, () => Promise.resolve([]))
 }
 
+export async function recalculateTagUsageCounts(): Promise<void> {
+  return safeInvoke<void>('recalculate_tag_usage_counts', undefined, () => {
+    // In browser mode, do nothing
+    return Promise.resolve()
+  })
+}
+
 // Task relationship commands
 export async function createTaskRelationship(input: CreateRelationshipInput): Promise<TaskRelationship> {
   return safeInvoke<TaskRelationship>('create_task_relationship', { input }, () => {

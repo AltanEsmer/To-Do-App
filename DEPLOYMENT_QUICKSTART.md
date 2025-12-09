@@ -2,6 +2,21 @@
 
 Congratulations! Your TodoApp is now configured for deployment with automatic updates.
 
+## 🔄 Auto-Update Feature
+
+**Will your app automatically update?** 
+✅ **YES!** When you push a new release to GitHub:
+1. The app checks for updates at startup and periodically
+2. Users see a dialog when an update is available
+3. One-click update downloads and installs the new version
+4. The updater configuration in `tauri.conf.json` points to your GitHub releases
+
+**Requirements:**
+- Updates work for version tags (e.g., v1.0.0, v1.0.1)
+- The `updater.json` file must be uploaded with each release
+- Users need the installed desktop app (not web version)
+- Internet connection required to check/download updates
+
 ## 📦 What Has Been Set Up
 
 ### Configuration Files Modified:

@@ -201,6 +201,7 @@ fn main() {
             commands::get_suggested_tags,
             commands::get_tasks_by_tag,
             commands::get_tasks_by_tags,
+            commands::recalculate_tag_usage_counts,
             commands::create_task_relationship,
             commands::delete_task_relationship,
             commands::get_related_tasks,

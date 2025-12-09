@@ -27,6 +27,8 @@ export const useTags = create<TagsState>()((set) => ({
   syncTags: async () => {
     try {
       set({ loading: true, error: null })
+      // Recalculate usage counts to ensure they're accurate
+      await tauriAdapter.recalculateTagUsageCounts()
       const tags = await tauriAdapter.getAllTags()
       set({ tags, loading: false })
     } catch (error) {

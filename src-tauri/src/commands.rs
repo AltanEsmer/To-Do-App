@@ -480,8 +480,27 @@ pub fn update_task(
 pub fn delete_task(db: State<'_, Arc<Mutex<DbConnection>>>, id: String) -> Result<(), String> {
     let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
     
+    // Get all tags associated with this task before deletion
+    let tag_ids: Vec<String> = db.conn.prepare(
+        "SELECT tag_id FROM task_tags WHERE task_id = ?1"
+    )
+    .map_err(|e| format!("Failed to query task tags: {}", e))?
+    .query_map(params![id], |row| row.get(0))
+    .map_err(|e| format!("Failed to execute query: {}", e))?
+    .collect::<Result<Vec<String>, _>>()
+    .map_err(|e| format!("Failed to collect tag IDs: {}", e))?;
+    
+    // Delete the task (CASCADE will handle task_tags deletion)
     db.conn.execute("DELETE FROM tasks WHERE id = ?1", params![id])
         .map_err(|e| format!("Failed to delete task: {}", e))?;
+    
+    // Update usage_count for each affected tag
+    for tag_id in tag_ids {
+        db.conn.execute(
+            "UPDATE tags SET usage_count = MAX(0, usage_count - 1) WHERE id = ?1",
+            params![tag_id],
+        ).map_err(|e| format!("Failed to update tag usage count: {}", e))?;
+    }
     
     Ok(())
 }
@@ -2597,11 +2616,11 @@ pub fn create_tag(db: State<'_, Arc<Mutex<DbConnection>>>, input: CreateTagInput
 }
 
 #[tauri::command]
-pub fn delete_tag(db: State<'_, Arc<Mutex<DbConnection>>>, tagId: String) -> Result<(), String> {
+pub fn delete_tag(db: State<'_, Arc<Mutex<DbConnection>>>, tag_id: String) -> Result<(), String> {
     let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
     
     // CASCADE will handle task_tags deletion
-    db.conn.execute("DELETE FROM tags WHERE id = ?1", params![tagId])
+    db.conn.execute("DELETE FROM tags WHERE id = ?1", params![tag_id])
         .map_err(|e| format!("Failed to delete tag: {}", e))?;
     
     Ok(())
@@ -2746,6 +2765,21 @@ pub fn get_tasks_by_tag(
     }
     
     Ok(tasks)
+}
+
+#[tauri::command]
+pub fn recalculate_tag_usage_counts(db: State<'_, Arc<Mutex<DbConnection>>>) -> Result<(), String> {
+    let db = db.lock().map_err(|e| format!("Database lock error: {}", e))?;
+    
+    // Update all tags with correct usage counts based on actual task_tags records
+    db.conn.execute(
+        "UPDATE tags SET usage_count = (
+            SELECT COUNT(*) FROM task_tags WHERE task_tags.tag_id = tags.id
+        )",
+        [],
+    ).map_err(|e| format!("Failed to recalculate tag usage counts: {}", e))?;
+    
+    Ok(())
 }
 
 #[tauri::command]
